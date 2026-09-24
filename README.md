@@ -58,3 +58,5 @@ Las pulsaciones breves de teclado y botones táctiles se conservan hasta el sigu
 ## GITHUB PAGES ha sido publicado.
 Intenta acceder en:
 https://the-master-shang-ting.github.io/Ultimate-Shaolin-Football/
+
+- El multijugador es totalmente global por lo que parece ser, comprobar mediante invitaciones a amigos, el juego esta disponible para Celulares y Computadoras, manteniendo compatibilidad con controles de XBOX, Playstation y Nintendo Switch.
