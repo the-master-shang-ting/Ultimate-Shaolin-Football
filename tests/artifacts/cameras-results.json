@@ -1,0 +1,130 @@
+{
+  "browser": "Chrome",
+  "summary": "31 / 31 pruebas correctas",
+  "tests": [
+    {
+      "ok": true,
+      "name": "✓ Solo el seleccionado recibe el control manual"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cambio y pase se disparan una vez por pulsación"
+    },
+    {
+      "ok": true,
+      "name": "✓ Teclado local separado y disparo al soltar"
+    },
+    {
+      "ok": true,
+      "name": "✓ Pase libre y bloqueo de recaptura del pateador"
+    },
+    {
+      "ok": true,
+      "name": "✓ Recepción de balón suelto por IA"
+    },
+    {
+      "ok": true,
+      "name": "✓ Un tackle lejano no mueve la pelota"
+    },
+    {
+      "ok": true,
+      "name": "✓ Arquero ataja por contacto sin temporizadores"
+    },
+    {
+      "ok": true,
+      "name": "✓ Gol solo al cruzar toda la línea, una sola vez"
+    },
+    {
+      "ok": true,
+      "name": "✓ No hay gol sobre travesaño ni entrando por detrás"
+    },
+    {
+      "ok": true,
+      "name": "✓ Poste devuelve el balón"
+    },
+    {
+      "ok": true,
+      "name": "✓ Banda espera cruce completo y asigna el saque rival"
+    },
+    {
+      "ok": true,
+      "name": "✓ Córner y saque de meta en ambos tiempos"
+    },
+    {
+      "ok": true,
+      "name": "✓ Fuera de juego respeta la dirección de ataque"
+    },
+    {
+      "ok": true,
+      "name": "✓ Falta solo es penal en el área propia del defensor"
+    },
+    {
+      "ok": true,
+      "name": "✓ Pausa congela cronómetro y celebración"
+    },
+    {
+      "ok": true,
+      "name": "✓ Descanso cambia campo y final detiene el balón"
+    },
+    {
+      "ok": true,
+      "name": "✓ Reiniciar elimina tarjetas, expulsados y repeticiones"
+    },
+    {
+      "ok": true,
+      "name": "✓ Los puestos de laterales y extremos corresponden a su formación"
+    },
+    {
+      "ok": true,
+      "name": "✓ Mando estándar no confunde stick derecho con gatillo"
+    },
+    {
+      "ok": true,
+      "name": "✓ Gol conducido y autoría tras cambio de campo"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cancha completa dentro del encuadre horizontal y vertical"
+    },
+    {
+      "ok": true,
+      "name": "✓ Las cuatro cámaras completan un ciclo y usan la proyección correcta"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cámara del jugador encuadra al seleccionado en ambos campos y en móvil"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cámara del jugador conserva el balón cercano que llega por detrás"
+    },
+    {
+      "ok": true,
+      "name": "✓ Direcciones relativas a pantalla en las dos cámaras nuevas"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cambio direccional elige un compañero hacia el lado indicado"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cambio manual tiene prioridad y no vuelve solo al poseedor"
+    },
+    {
+      "ok": true,
+      "name": "✓ Control del receptor durante el vuelo del pase"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cambio excluye arquero, expulsados y jugadores caídos"
+    },
+    {
+      "ok": true,
+      "name": "✓ Una pulsación rápida de cambio entre fotogramas no se pierde"
+    },
+    {
+      "ok": true,
+      "name": "✓ Cámara LAN sigue al invitado y respeta el segundo tiempo"
+    }
+  ]
+}

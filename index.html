@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ultimate Shaolin Football - FIFA 26 Edition</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%2300FF88'/><circle cx='50' cy='50' r='36' fill='%23070B14'/><polygon points='50,20 60,40 82,40 65,54 71,76 50,62 29,76 35,54 18,40 40,40' fill='%23FFD700'/></svg>">
+</head>
+<body>
+    <!-- Contenedor 3D Three.js -->
+    <div id="game-container"></div>
+
+    <!-- Contenedor de Notificaciones Toast Flotantes (Estilo Consola) -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- HUD DE TRANSMISIÓN OFICIAL DE TV -->
+    <div id="match-hud">
+        <!-- Marcador Top-Left -->
+        <div class="tv-scoreboard">
+            <div class="sb-team">
+                <div id="sb-t1-badge" class="sb-badge"></div>
+                <div id="sb-t1-name" class="sb-name">RMA</div>
+            </div>
+            <div id="sb-score" class="sb-score-box">0 - 0</div>
+            <div class="sb-team">
+                <div id="sb-t2-name" class="sb-name">BAR</div>
+                <div id="sb-t2-badge" class="sb-badge"></div>
+            </div>
+            <div id="sb-time" class="sb-time-box">00:00</div>
+        </div>
+
+        <!-- Botón de Pausa en el HUD -->
+        <button id="btn-hud-pause" style="position: absolute; top: 24px; right: 32px; background: rgba(8, 14, 27, 0.85); border: 1px solid var(--primary-neon); color: #FFFFFF; font-family: 'Teko', sans-serif; font-size: 22px; padding: 6px 18px; border-radius: 6px; cursor: pointer; pointer-events: auto; letter-spacing: 1px; backdrop-filter: blur(8px);">PAUSA ❚❚</button>
+
+        <div id="match-status" class="match-status">1º TIEMPO · VS IA</div>
+        <button id="btn-camera" class="camera-button" title="C: alternar Completa, TV, Comentarista y Jugador" aria-label="Cambiar cámara: Completa, TV, Comentarista o Jugador">CÁMARA: COMPLETA</button>
+        <div class="control-hint">WASD mover · K pase · J tiro · Q cambiar · Shift correr · C cámara · Esc pausa</div>
+
+        <!-- Tarjeta de Jugador Activo (Bottom-Left) -->
+        <div class="active-player-card">
+            <div class="ap-info">
+                <div id="ap-name" class="ap-name">MBAPPÉ</div>
+                <div id="ap-number" class="ap-number">#9 (ST)</div>
+            </div>
+            <div id="next-player" class="next-player">Q / LB · CAMBIAR JUGADOR</div>
+            <div class="bar-container">
+                <div id="stamina-fill" class="stamina-fill"></div>
+            </div>
+            <div class="power-bar-container">
+                <div id="power-fill" class="power-fill"></div>
+            </div>
+        </div>
+
+        <!-- Radar 2D de la Cancha (Bottom-Center) -->
+        <div class="pitch-radar-wrapper">
+            <canvas id="radar-canvas" width="220" height="142"></canvas>
+        </div>
+
+        <!-- Banner de Eventos de Partido (Goles, Faltas, Offsides) -->
+        <div id="match-event-banner" class="match-event-banner">
+            <div id="banner-title" class="banner-title">¡¡GOOOOOOL!!</div>
+            <div id="banner-sub" class="banner-subtitle">REAL MADRID CF</div>
+        </div>
+    </div>
+
+    <!-- Overlay de Repetición Instantánea (Replay) -->
+    <div id="replay-overlay">
+        <button id="btn-skip-replay" class="camera-button">OMITIR REPETICIÓN →</button>
+        <div class="replay-watermark">
+            <div class="replay-rec-dot"></div>
+            <div class="replay-text">INSTANT REPLAY • SLOW MOTION</div>
+        </div>
+    </div>
+
+    <!-- MENÚ PRINCIPAL ESTILO FC26 -->
+    <div id="main-menu" class="ui-overlay fc-menu-overlay">
+        <!-- Barra Superior (Top Bar) -->
+        <header class="fc-top-bar">
+            <div class="fc-brand">
+                <button id="btn-fc-settings" class="fc-icon-btn" title="Controles y Guía" aria-label="Ajustes">⚙</button>
+                <div class="fc-logo-badge">
+                    <span class="fc-logo-fc">FC</span>
+                    <span class="fc-logo-num">26</span>
+                    <span class="fc-logo-sub">USF</span>
+                </div>
+            </div>
+
+            <div class="fc-profile-wrapper">
+                <div class="fc-profile-card">
+                    <div class="fc-profile-avatar">⚽</div>
+                    <div class="fc-profile-info">
+                        <div class="fc-profile-name">Pele10</div>
+                        <div class="fc-profile-stats">
+                            <span class="fc-level-badge">LVL 12</span>
+                            <span class="fc-coins-badge">🪙 8.450</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-fullscreen-toggle" class="fc-icon-btn" title="Pantalla Completa (F)" aria-label="Pantalla Completa">⛶</button>
+            </div>
+        </header>
+
+        <!-- Cuerpo del Menú: Barra Lateral + Hero Showcase -->
+        <div class="fc-menu-body">
+            <!-- Navegación Lateral Izquierda (Sidebar) -->
+            <nav id="fc-sidebar" class="fc-sidebar">
+                <div class="fc-nav-category">MODOS DE JUEGO</div>
+                <div class="fc-nav-items">
+                    <button id="btn-mode-ai" class="fc-nav-item active" data-mode="KICKOFF">
+                        <span class="fc-nav-icon">⚽</span>
+                        <div class="fc-nav-text">
+                            <span class="fc-nav-title">PARTIDO RÁPIDO</span>
+                            <span class="fc-nav-sub">KICK OFF · VS IA</span>
+                        </div>
+                        <span class="fc-nav-arrow">›</span>
+                    </button>
+                    <button id="btn-mode-local" class="fc-nav-item" data-mode="LOCAL_1V1">
+                        <span class="fc-nav-icon">🎮</span>
+                        <div class="fc-nav-text">
+                            <span class="fc-nav-title">1V1 LOCAL</span>
+                            <span class="fc-nav-sub">MISMO DISPOSITIVO</span>
+                        </div>
+                        <span class="fc-nav-arrow">›</span>
+                    </button>
+                    <button id="btn-mode-lan" class="fc-nav-item" data-mode="ONLINE">
+                        <span class="fc-nav-icon">🌐</span>
+                        <div class="fc-nav-text">
+                            <span class="fc-nav-title">ONLINE GLOBAL</span>
+                            <span class="fc-nav-sub">SALAS P2P WEBRTC</span>
+                        </div>
+                        <span class="fc-nav-arrow">›</span>
+                    </button>
+                    <button id="btn-mode-controls" class="fc-nav-item" data-mode="CONTROLS">
+                        <span class="fc-nav-icon">📖</span>
+                        <div class="fc-nav-text">
+                            <span class="fc-nav-title">CONTROLES & GUÍA</span>
+                            <span class="fc-nav-sub">MANDOS · TECLADO · MÓVIL</span>
+                        </div>
+                        <span class="fc-nav-arrow">›</span>
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Tarjeta Central Hero Showcase (Fiel al screenshot MC / Bellingham) -->
+            <main class="fc-hero-wrapper">
+                <div id="fc-hero-card" class="fc-hero-card">
+                    <div class="fc-hero-emblem" id="fc-hero-emblem">KO</div>
+                    <h2 class="fc-hero-title" id="fc-hero-title">¿Listo para saltar a la cancha?</h2>
+                    <div class="fc-hero-bullets" id="fc-hero-bullets">
+                        <span>Elige tu club</span> • <span>Ajusta tu táctica</span> • <span>Busca la victoria</span>
+                    </div>
+                    <button id="fc-hero-action" class="fc-hero-action-btn">
+                        <span class="fc-action-key">Ⓕ / ␣</span>
+                        <span class="fc-action-label" id="fc-hero-action-label">Jugar Partido Rápido</span>
+                        <span class="fc-action-arrow">➔</span>
+                    </button>
+                </div>
+            </main>
+        </div>
+
+        <!-- Barra Inferior de Comandos y Leyenda -->
+        <footer class="fc-bottom-bar">
+            <div class="fc-bottom-hints">
+                <span class="fc-hint-chip"><kbd>A / ␣</kbd> Seleccionar</span>
+                <span class="fc-hint-chip"><kbd>B / Esc</kbd> Volver</span>
+                <span class="fc-hint-chip"><kbd>C</kbd> Cámara</span>
+                <span class="fc-hint-chip"><kbd>F</kbd> Pantalla Completa</span>
+            </div>
+            <div class="fc-bottom-status">
+                <span class="fc-status-dot"></span>
+                <span id="fc-network-indicator">SERVIDOR ONLINE (Global P2P)</span>
+                <span class="fc-ver-tag">v2.6 FC</span>
+            </div>
+        </footer>
+    </div>
+
+    <!-- SELECTOR DE EQUIPOS Y PLANTILLAS -->
+    <div id="team-select-screen" class="ui-overlay">
+        <div class="menu-container" style="max-width: 1200px;">
+            <div style="text-align: center;">
+                <div class="logo-sub" style="color: var(--accent-gold);">SELECCIÓN DE EQUIPOS</div>
+                <div class="logo-title" style="font-size: 64px;">ELIGE TU PLANTEL</div>
+                <div style="font-size: 14px; color: var(--text-muted); margin-top: 4px;">
+                    Haz clic o navega con el mando para asignar Local (Azul P1) y Visitante (Rojo P2)
+                </div>
+            </div>
+
+            <!-- Pestañas de Filtro de Categoría -->
+            <div class="team-filter-tabs">
+                <button class="filter-tab-btn active" data-filter="all">TODOS LOS EQUIPOS (10)</button>
+                <button class="filter-tab-btn" data-filter="elite">TIER ÉLITE ★★★★★ (6)</button>
+                <button class="filter-tab-btn" data-filter="modest">TIER MODESTO ★★★☆☆ (4)</button>
+            </div>
+
+            <div id="teams-grid" class="teams-grid"></div>
+
+            <div class="gamepad-nav-guide">
+                <span>🎮 <b>D-Pad / Stick:</b> Navegar • <b>[A / ✕]:</b> Seleccionar • <b>[B / ○]:</b> Volver • <b>[LB / RB]:</b> Filtrar Categoría</span>
+            </div>
+
+            <div style="display: flex; gap: 20px; width: 100%; max-width: 500px; justify-content: center;">
+                <button id="btn-back-team-select" class="btn-primary" style="background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2);">
+                    <span>Volver</span>
+                </button>
+                <button id="btn-start-match" class="btn-primary" style="flex: 1;">
+                    <span>SALTAR A LA CANCHA</span>
+                    <span>⚽</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE MULTIJUGADOR GLOBAL ONLINE (WebRTC P2P) -->
+    <div id="lan-modal" class="ui-overlay" style="display: none;">
+        <div class="menu-container" style="max-width: 540px; background: var(--glass-bg); padding: 32px; border-radius: 12px; border: 1px solid var(--primary-neon);">
+            <div style="text-align: center;">
+                <div style="font-family: 'Teko', sans-serif; font-size: 42px; color: var(--primary-neon); line-height: 1;">MULTIJUGADOR GLOBAL P2P</div>
+                <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Partidas 1v1 online mundiales vía WebRTC sin servidores externos</div>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); width: 100%;">
+                <div style="font-size: 14px; font-weight: 700; color: var(--primary-neon); margin-bottom: 8px;">1. CREAR SALA (HOST)</div>
+                <button id="btn-lan-host" class="btn-primary" style="width: 100%; font-size: 15px; padding: 12px; justify-content: center;">
+                    <span>Generar Sala & Enlace</span>
+                </button>
+                <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 6px;">
+                    <span style="font-size: 13px; color: var(--text-muted);">CÓDIGO:</span>
+                    <span id="lan-room-code-display" style="font-family: 'Teko', sans-serif; font-size: 30px; color: var(--accent-gold); font-weight: bold; letter-spacing: 2px;">-----</span>
+                </div>
+                <button id="btn-copy-invite-link" class="btn-primary" style="width: 100%; font-size: 13px; padding: 10px; margin-top: 10px; background: rgba(255,215,0,0.15); border-color: var(--accent-gold); justify-content: center; display: none;">
+                    <span>Copiar Enlace de Invitación 🔗</span>
+                </button>
+            </div>
+
+            <div style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); width: 100%;">
+                <div style="font-size: 14px; font-weight: 700; color: #60A5FA; margin-bottom: 8px;">2. UNIRSE A SALA (GUEST)</div>
+                <input type="text" id="lan-code-input" class="input-code" placeholder="CÓDIGO (EJ: ABCDE)" maxlength="6" style="width: 100%; text-align: center; text-transform: uppercase; font-family: 'Teko', sans-serif; font-size: 26px; padding: 8px; border-radius: 6px; background: #000; border: 1px solid rgba(255,255,255,0.25); color: #FFF;">
+                <button id="btn-lan-join" class="btn-primary" style="width: 100%; font-size: 15px; padding: 12px; margin-top: 10px; justify-content: center;">
+                    <span>Conectar con Rival</span>
+                </button>
+            </div>
+
+            <div id="lan-status" style="font-size: 13px; color: var(--primary-neon); text-align: center; min-height: 20px;"></div>
+
+            <button id="btn-close-lan" class="btn-primary" style="background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); justify-content: center; width: 100%;">
+                <span>Cerrar</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- MODAL DE PAUSA -->
+    <div id="pause-modal" class="ui-overlay" style="display: none;">
+        <div class="menu-container" style="max-width: 440px; background: var(--glass-bg); padding: 36px; border-radius: 12px; border: 1px solid var(--primary-neon);">
+            <div style="font-family: 'Teko', sans-serif; font-size: 54px; color: var(--primary-neon); text-align: center;">PARTIDO EN PAUSA</div>
+            <div class="menu-options" style="width: 100%;">
+                <button id="btn-resume" class="btn-primary">
+                    <span>Reanudar Partido</span>
+                    <span>▶</span>
+                </button>
+                <button id="btn-restart" class="btn-primary" style="background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2);">
+                    <span>Reiniciar Partido</span>
+                    <span>⟳</span>
+                </button>
+                <button id="btn-quit-menu" class="btn-primary" style="background: rgba(255,46,85,0.15); border-color: var(--accent-red);">
+                    <span>Abandonar al Menú</span>
+                    <span>✕</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONTROLES -->
+    <div id="controls-modal" class="ui-overlay" style="display: none;">
+        <div class="menu-container" style="max-width: 850px; background: var(--glass-bg); padding: 36px; border-radius: 12px; border: 1px solid var(--primary-neon);">
+            <div style="font-family: 'Teko', sans-serif; font-size: 44px; color: var(--primary-neon);">ESQUEMA DE CONTROLES</div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; width: 100%; font-size: 14px;">
+                <div style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 8px;">
+                    <div style="font-weight: bold; color: var(--accent-gold); margin-bottom: 12px; font-size: 16px;">TECLADO + MOUSE (PC)</div>
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+                        <li><b>WASD / Flechas:</b> Mover jugador / Apuntar</li>
+                        <li><b>K / Clic Izquierdo:</b> Pase corto / Entrada en defensa</li>
+                        <li><b>J (Mantener):</b> Cargar potencia de Disparo</li>
+                        <li><b>J (Soltar):</b> Disparar a puerta / Supertiro Shaolin</li>
+                        <li><b>J (En defensa):</b> Tackle deslizante (Slide tackle)</li>
+                        <li><b>L:</b> Pase filtrado al hueco</li>
+                        <li><b>E:</b> Entrada defensiva</li>
+                        <li><b>P2 local:</b> Flechas · Num 1 pase · Num 2 tiro · Num 3 filtrado · Enter cambiar · Shift derecho correr</li>
+                        <li><b>Shift:</b> Sprint de máxima velocidad</li>
+                        <li><b>Espacio / Q:</b> Cambiar al mejor situado; mantené una dirección para elegir hacia ese lado</li>
+                        <li><b>C:</b> Alternar Completa, TV, Comentarista y Jugador</li>
+                    </ul>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.5); padding: 18px; border-radius: 8px;">
+                    <div style="font-weight: bold; color: var(--accent-gold); margin-bottom: 12px; font-size: 16px;">MANDOS / GAMEPAD (XBOX / PS)</div>
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+                        <li><b>Stick Izquierdo:</b> Movimiento multidireccional</li>
+                        <li><b>Botón A (Cruz):</b> Pase raso / Presión</li>
+                        <li><b>Botón X (Cuadrado):</b> Disparo con carga / Entrada</li>
+                        <li><b>Botón Y (Triángulo):</b> Pase filtrado</li>
+                        <li><b>Botón B (Círculo):</b> Tackle secundario / Despeje</li>
+                        <li><b>Gatillo RT / R2:</b> Sprint</li>
+                        <li><b>Botón LB / L1:</b> Cambio inteligente; orientá el stick para elegir hacia ese lado</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button id="btn-close-controls" class="btn-primary" style="margin-top: 10px; width: 220px; justify-content: center;">
+                <span>Entendido</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- CONTROLES TÁCTILES ERGONÓMICOS PARA MÓVILES (Estilo FC Mobile) -->
+    <div id="touch-controls">
+        <!-- Zona de Joystick Flotante (Mitad izquierda de la pantalla) -->
+        <div id="joystick-zone">
+            <div id="joystick-base">
+                <div id="joystick-knob"></div>
+            </div>
+        </div>
+
+        <!-- Botones Auxiliares Móviles (Arriba derecha) -->
+        <div class="touch-top-bar">
+            <button id="btn-touch-fullscreen" class="touch-aux-btn" title="Pantalla completa">⛶</button>
+            <button id="btn-touch-pause" class="touch-aux-btn" title="Pausar partido">❚❚</button>
+        </div>
+
+        <!-- Botonera de Acción en Abanico / Diamante Ergonómico (Derecha) -->
+        <div class="touch-buttons touch-cluster">
+            <div id="btn-touch-through" class="touch-btn touch-through">
+                <span class="touch-btn-label">FILTRADO</span>
+                <span class="touch-btn-sub">Y / △</span>
+            </div>
+            <div id="btn-touch-sprint" class="touch-btn touch-sprint">
+                <span class="touch-btn-label">SPRINT</span>
+                <span class="touch-btn-sub">RT / R2</span>
+            </div>
+            <div id="btn-touch-pass" class="touch-btn touch-pass">
+                <span class="touch-btn-label">PASE</span>
+                <span class="touch-btn-sub">A / ✕</span>
+            </div>
+            <div id="btn-touch-shoot" class="touch-btn touch-shoot shoot">
+                <div class="touch-shoot-gauge" id="touch-shoot-gauge"></div>
+                <span class="touch-btn-label">TIRO</span>
+                <span class="touch-btn-sub">X / □</span>
+            </div>
+            <div id="btn-touch-switch" class="touch-btn touch-switch">
+                <span class="touch-btn-label">CAMBIO</span>
+                <span class="touch-btn-sub">LB / L1</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEPENDENCIAS CDN -->
+    <script src="vendor/three.min.js"></script>
+    <script src="vendor/peerjs.min.js"></script>
+
+    <!-- MÓDULOS DEL JUEGO -->
+    <script src="js/TeamsData.js"></script>
+    <script src="js/SoundEngine.js"></script>
+    <script src="js/InputManager.js"></script>
+    <script src="js/PhysicsEngine.js"></script>
+    <script src="js/PlayerModel.js"></script>
+    <script src="js/RenderEngine.js"></script>
+    <script src="js/RulesEngine.js"></script>
+    <script src="js/AIEngine.js"></script>
+    <script src="js/NetworkManager.js"></script>
+    <script src="js/ReplaySystem.js"></script>
+    <script src="js/UIManager.js"></script>
+    <script src="js/GameEngine.js"></script>
+
+    <!-- BOOTSTRAP -->
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            // Inicializar el motor al cargar el DOM
+            window.game = new window.USF.GameEngine();
+
+            // Desbloquear audio en la primera interacción de usuario
+            const unlockAudio = () => {
+                if (window.USF && window.USF.soundEngine) {
+                    window.USF.soundEngine.ensureContext();
+                }
+                window.removeEventListener('pointerdown', unlockAudio);
+                window.removeEventListener('keydown', unlockAudio);
+            };
+            window.addEventListener('pointerdown', unlockAudio);
+            window.addEventListener('keydown', unlockAudio);
+        });
+    </script>
+</body>
+</html>
