@@ -55,4 +55,6 @@ C o el botón CÁMARA recorren Completa → TV → Comentarista → Jugador.
 
 Las pulsaciones breves de teclado y botones táctiles se conservan hasta el siguiente fotograma para evitar perder cambios rápidos de jugador.
 
-## Intentare abrir un github pages para jugar globalmente.
+## GITHUB PAGES ha sido publicado.
+Intenta acceder en:
+https://the-master-shang-ting.github.io/Ultimate-Shaolin-Football/
