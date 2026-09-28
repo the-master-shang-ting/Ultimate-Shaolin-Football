@@ -20,6 +20,9 @@ class UIManager {
         // Tarjeta de Jugador Activo
         this.apName = document.getElementById('ap-name');
         this.apNumber = document.getElementById('ap-number');
+        this.apInjury = document.getElementById('ap-injury');
+        this.apInjuryText = document.getElementById('ap-injury-text');
+        this.activePlayerCard = this.apName?.closest('.active-player-card');
         this.staminaFill = document.getElementById('stamina-fill');
         this.powerFill = document.getElementById('power-fill');
 
@@ -42,6 +45,8 @@ class UIManager {
         this.lanModal = document.getElementById('lan-modal');
         this.controlsModal = document.getElementById('controls-modal');
         this.pauseModal = document.getElementById('pause-modal');
+        this.matchStatsPanel = document.getElementById('match-stats-panel');
+        document.getElementById('btn-close-match-stats')?.addEventListener('click',()=>{this.matchStatsPanel.hidden=true;});
 
         // Selección de Equipos
         this.selectedTeam1Id = 'real_madrid';
@@ -692,6 +697,34 @@ class UIManager {
         if (this.sbTeam2Badge) this.sbTeam2Badge.innerHTML = team2.badgeSvg;
         if (this.sbScore) this.sbScore.innerText = `0 - 0`;
         if (this.sbTime) this.sbTime.innerText = `00:00`;
+        if (this.apInjury) this.apInjury.hidden = true;
+        this.activePlayerCard?.classList.remove('has-injury');
+        if(this.matchStatsPanel)this.matchStatsPanel.hidden=true;
+    }
+
+    showMatchStats(team1,team2,score,stats) {
+        if(!this.matchStatsPanel)return;
+        document.getElementById('stats-team1-name').textContent=team1.shortName||team1.name;
+        document.getElementById('stats-team2-name').textContent=team2.shortName||team2.name;
+        document.getElementById('stats-final-score').textContent=`${score.team1} - ${score.team2}`;
+        const a=stats.team1,b=stats.team2,total=(a.possession||0)+(b.possession||0);
+        const possession1=total?Math.round(a.possession/total*100):50;
+        const rows=[
+            ['Goles',score.team1,score.team2],
+            ['Posesión',`${possession1}%`,`${100-possession1}%`],
+            ['Tiros al arco',a.shotsOnTarget,b.shotsOnTarget],
+            ['Pases',a.passes,b.passes],
+            ['Paradas',a.saves,b.saves],
+            ['Córneres',a.corners,b.corners],
+            ['Amarillas',a.yellowCards,b.yellowCards]
+        ];
+        const container=document.getElementById('match-stats-rows');
+        container.replaceChildren(...rows.map(([label,left,right])=>{
+            const row=document.createElement('div');row.className='match-stat-row';
+            const l=document.createElement('b'),name=document.createElement('span'),r=document.createElement('b');
+            l.textContent=left;name.textContent=label;r.textContent=right;row.append(l,name,r);return row;
+        }));
+        this.matchStatsPanel.hidden=false;
     }
 
     updateScoreboard(score1, score2, matchSeconds, addedMinutes = 0) {
@@ -720,6 +753,15 @@ class UIManager {
         if (!player) return;
         if (this.apName) this.apName.innerText = player.playerData.name.toUpperCase();
         if (this.apNumber) this.apNumber.innerText = `#${player.playerData.number} (${player.role || player.playerData.pos})${card==='YELLOW'?' 🟨':card==='RED'?' 🟥':''}`;
+
+        const severity = Math.max(0, Math.min(.95, Number(player.injury?.severity) || 0));
+        const isInjured = severity > 0;
+        if (this.apInjury) this.apInjury.hidden = !isInjured;
+        if (this.apInjuryText && isInjured) {
+            const loss = Math.round(severity * ((player.role || player.playerData.pos) === 'GK' ? 60 : 45));
+            this.apInjuryText.textContent = `LESIONADO · RENDIMIENTO -${loss}% · CAMBIAR`;
+        }
+        this.activePlayerCard?.classList.toggle('has-injury', isInjured);
 
         if (this.staminaFill) {
             this.staminaFill.style.width = `${Math.max(0, Math.min(100, player.stamina || 100))}%`;

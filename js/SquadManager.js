@@ -127,7 +127,8 @@ class SquadManager {
             if (!player) return;
             const slotIndex = draft.slots[index] ?? index;
             const slot = formation[slotIndex] || formation[index];
-            const button = this.createPlayerButton(player, 'starter', index, slot.role, cards[id]);
+            const injury = team.players.find(p => p.playerData.id === id)?.injury || null;
+            const button = this.createPlayerButton(player, 'starter', index, slot.role, cards[id], injury);
             button.style.setProperty('--slot-left', `${Math.max(14, Math.min(86, 50 + slot.z * 45))}%`);
             button.style.setProperty('--slot-top', `${Math.max(8, Math.min(90, 88 - ((slot.x + 0.92) / 1.44) * 78))}%`);
             starters.append(button);
@@ -136,7 +137,7 @@ class SquadManager {
         draft.bench.forEach((id, index) => {
             const player = find(id);
             if (!player) return;
-            bench.append(this.createPlayerButton(player, 'bench', index, player.pos, cards[id]));
+            bench.append(this.createPlayerButton(player, 'bench', index, player.pos, cards[id], null));
         });
 
         this.renderPlayerInfo(find);
@@ -151,7 +152,7 @@ class SquadManager {
         }
     }
 
-    createPlayerButton(player, origin, index, role, card) {
+    createPlayerButton(player, origin, index, role, card, injury = null) {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = `squad-player squad-player-${origin}`;
@@ -159,7 +160,8 @@ class SquadManager {
         button.dataset.squadIndex = String(index);
         button.dataset.squadKey = `${origin}-${index}`;
         button.disabled = card === 'RED';
-        button.setAttribute('aria-label', `${player.name}, ${role}${card === 'RED' ? ', expulsado' : ''}`);
+        button.setAttribute('aria-label', `${player.name}, ${role}${card === 'RED' ? ', expulsado' : ''}${injury ? ', lesionado, cambio recomendado' : ''}`);
+        button.classList.toggle('injured',!!injury);
 
         if (this.selected?.origin === origin && this.selected.index === index) {
             button.classList.add('selected');
@@ -181,6 +183,12 @@ class SquadManager {
             cardText.className = `squad-card squad-card-${card.toLowerCase()}`;
             cardText.textContent = card === 'RED' ? 'EXPULSADO' : 'AMARILLA';
             button.append(cardText);
+        }
+        if (injury) {
+            const injuryText = document.createElement('span');
+            injuryText.className = 'squad-injury';
+            injuryText.textContent = '✚ LESIONADO · CAMBIAR';
+            button.append(injuryText);
         }
 
         button.onclick = () => {
@@ -324,6 +332,13 @@ class SquadManager {
         const detail = document.createElement('span');
         detail.textContent = `${role || player.pos} · dorsal ${player.number}`;
         info.append(name, detail);
+        const livePlayer = this.game[this.currentTeam].players.find(p => p.playerData.id === player.id);
+        if (livePlayer?.injury) {
+            const injury = document.createElement('span');
+            injury.className = 'squad-injury-detail';
+            injury.textContent = `✚ LESIÓN DE ${livePlayer.injury.type || 'CONTACTO'} · rendimiento reducido · sustitución recomendada`;
+            info.append(injury);
+        }
     }
 
     message(text) {
@@ -376,7 +391,8 @@ class SquadManager {
                 const playerData = pool.find(data => data.id === id), old = outgoingPlayers[incomingIndex++];
                 const model = new window.USF.PlayerModel(playerData, team.data, playerData.pos === 'GK');
                 this.game.renderer.playersGroup.add(model.mesh);
-                p = { ...old, playerData, model, stamina: 100, isSentOff: false, isTackling: false, tackleTimer: 0, actionCooldown: 0, dispossessTimer: 0, vx: 0, vz: 0 };
+                p = { ...old, playerData, model, stamina: 100, injury: null, isSentOff: false, isTackling: false, tackleTimer: 0, actionCooldown: 0, dispossessTimer: 0, vx: 0, vz: 0 };
+                model.setInjured(false);
                 replacements.set(old, p);
             }
             p.formationIndex = slots[index];

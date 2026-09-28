@@ -103,10 +103,22 @@ class PlayerModel {
         addArm(-1, 'left'); addArm(1, 'right');
         this.chevron = new THREE.Mesh(new THREE.ConeGeometry(.18, .32, 4), new THREE.MeshBasicMaterial({ color: 0xFF2222 }));
         this.chevron.rotation.x = Math.PI; this.chevron.position.y = 2.25*s; this.chevron.visible = false; this.mesh.add(this.chevron);
+        this.injuryIndicator = new THREE.Group();
+        const injuryMaterial = new THREE.MeshBasicMaterial({color:0xff2348,depthTest:false,depthWrite:false});
+        const injuryVertical = new THREE.Mesh(new THREE.BoxGeometry(.12,.48,.07),injuryMaterial);
+        const injuryHorizontal = new THREE.Mesh(new THREE.BoxGeometry(.48,.12,.07),injuryMaterial);
+        injuryVertical.renderOrder = injuryHorizontal.renderOrder = 20;
+        this.injuryIndicator.add(injuryVertical,injuryHorizontal);
+        this.injuryIndicator.position.set(0,2.72*s,.08);
+        this.injuryIndicator.visible = false;
+        this.mesh.add(this.injuryIndicator);
+        this.isInjured = false;
     }
 
     setSelected(selected, color = 0x00FF88) { if(this.selectionRing) {this.selectionRing.visible=!!selected;this.selectionRing.material.color.setHex(color);}
-        if (this.chevron) { this.chevron.visible = !!selected; this.chevron.material.color.setHex(color); } }
+        if (this.chevron) { this.chevron.visible = !!selected; this.chevron.material.color.setHex(color); }
+        if (this.injuryIndicator) this.injuryIndicator.visible = !!selected && this.isInjured; }
+    setInjured(injured) { this.isInjured = !!injured; if(this.injuryIndicator)this.injuryIndicator.visible=this.isInjured&&!!this.selectionRing?.visible; }
     setSuggested(suggested) { this.suggestionRing.visible = !!suggested && !this.selectionRing.visible; }
     triggerKick(power = false) { this.currentAnim = power ? 'KICK_POWER' : 'KICK'; this.kickProgress = 0; }
     triggerSlideTackle() { this.currentAnim = 'TACKLE'; this.tackleProgress = 0; }

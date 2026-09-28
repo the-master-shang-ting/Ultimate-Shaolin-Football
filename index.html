@@ -43,6 +43,10 @@
                 <div id="ap-name" class="ap-name">MBAPPÉ</div>
                 <div id="ap-number" class="ap-number">#9 (ST)</div>
             </div>
+            <div id="ap-injury" class="ap-injury" hidden>
+                <span class="ap-injury-cross" aria-hidden="true">✚</span>
+                <span id="ap-injury-text">LESIONADO · CAMBIO RECOMENDADO</span>
+            </div>
             <div id="next-player" class="next-player">Q / LB · CAMBIAR JUGADOR</div>
             <div class="bar-container">
                 <div id="stamina-fill" class="stamina-fill"></div>
@@ -338,6 +342,19 @@
         </div>
     </div>
 
+    <div id="match-stats-panel" hidden>
+        <div class="match-stats-card">
+            <div class="match-stats-kicker">FINAL DEL PARTIDO</div>
+            <div class="match-stats-scoreline">
+                <span id="stats-team1-name">LOCAL</span>
+                <strong id="stats-final-score">0 - 0</strong>
+                <span id="stats-team2-name">VISITANTE</span>
+            </div>
+            <div id="match-stats-rows" class="match-stats-rows"></div>
+            <button id="btn-close-match-stats" class="btn-primary">Cerrar estadísticas</button>
+        </div>
+    </div>
+
     <!-- MODAL DE CONTROLES -->
     <div id="controls-modal" class="ui-overlay" style="display: none;">
         <div class="menu-container" style="max-width: 850px; background: var(--glass-bg); padding: 36px; border-radius: 12px; border: 1px solid var(--primary-neon);">
@@ -399,7 +416,7 @@
         <!-- Botonera de Acción en Abanico / Diamante Ergonómico (Derecha) -->
         <div class="touch-buttons touch-cluster">
             <div id="btn-touch-through" class="touch-btn touch-through">
-                <span class="touch-btn-label">FILTRADO</span>
+                <span id="touch-through-label" class="touch-btn-label">FILTRADO</span>
                 <span class="touch-btn-sub">Y / △</span>
             </div>
             <div id="btn-touch-sprint" class="touch-btn touch-sprint">
@@ -407,12 +424,12 @@
                 <span class="touch-btn-sub">RT / R2</span>
             </div>
             <div id="btn-touch-pass" class="touch-btn touch-pass">
-                <span class="touch-btn-label">PASE</span>
+                <span id="touch-pass-label" class="touch-btn-label">PASE</span>
                 <span class="touch-btn-sub">A / ✕</span>
             </div>
             <div id="btn-touch-shoot" class="touch-btn touch-shoot shoot">
                 <div class="touch-shoot-gauge" id="touch-shoot-gauge"></div>
-                <span class="touch-btn-label">TIRO</span>
+                <span id="touch-shoot-label" class="touch-btn-label">TIRO</span>
                 <span class="touch-btn-sub">X / □</span>
             </div>
             <div id="btn-touch-switch" class="touch-btn touch-switch">

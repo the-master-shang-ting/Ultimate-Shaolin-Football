@@ -41,7 +41,9 @@ class InputManager {
             shoot: false,
             shootPower: 0,
             through: false,
-            sprint: false
+            sprint: false,
+            tackle: false,
+            pressure: false
         };
 
         // Callbacks para navegación de UI y Toasts
@@ -233,9 +235,17 @@ class InputManager {
         joystickZone.addEventListener('touchcancel', resetJoystick);
 
         this.bindTouchButton('btn-touch-pass', (pressed) => { this.touchInput.pass = pressed; });
-        this.bindTouchButton('btn-touch-through', (pressed) => { this.touchInput.through = pressed; });
+        this.bindTouchButton('btn-touch-through', (pressed) => {
+            if (!pressed) { this.touchInput.through=false;this.touchInput.pressure=false;return; }
+            if (this.touchContext==='defense') this.touchInput.pressure=true;
+            else this.touchInput.through=true;
+        });
         this.bindTouchButton('btn-touch-sprint', (pressed) => { this.touchInput.sprint = pressed; });
-        this.bindTouchButton('btn-touch-shoot', (pressed) => { this.touchInput.shootCharging = pressed; });
+        this.bindTouchButton('btn-touch-shoot', (pressed) => {
+            if (!pressed) { this.touchInput.shootCharging=false;this.touchInput.tackle=false;return; }
+            if (this.touchContext==='defense') this.touchInput.tackle=true;
+            else this.touchInput.shootCharging=true;
+        });
         this.bindTouchButton('btn-touch-switch', (pressed) => { this.touchInput.switchPlayer = pressed; });
 
         // Botones auxiliares móviles
@@ -247,6 +257,38 @@ class InputManager {
             e.preventDefault();
             document.getElementById('btn-hud-pause')?.click();
         });
+    }
+
+    setTouchContext(context = 'attack') {
+        if (!this.isTouchDevice) return;
+        const next = ['attack','defense','set-piece'].includes(context) ? context : 'attack';
+        if (this.touchContext === next) return;
+        this.touchContext = next;
+        const container=document.getElementById('touch-controls');
+        if(container)container.dataset.context=next;
+        const labels = next==='defense'
+            ? {pass:'ENTRADA',shoot:'BARRIDA',through:'PRESIÓN'}
+            : next==='set-piece'
+                ? {pass:'PASE',shoot:'POTENCIA',through:'FILTRADO'}
+                : {pass:'PASE',shoot:'TIRO',through:'FILTRADO'};
+        for(const [key,value] of Object.entries(labels)) {
+            const element=document.getElementById(`touch-${key}-label`);
+            if(element)element.textContent=value;
+        }
+        const pass=document.getElementById('btn-touch-pass');
+        const shoot=document.getElementById('btn-touch-shoot');
+        const through=document.getElementById('btn-touch-through');
+        pass?.setAttribute('aria-label',labels.pass);
+        shoot?.setAttribute('aria-label',labels.shoot);
+        through?.setAttribute('aria-label',labels.through);
+        if(next==='defense') {
+            this.touchInput.shootCharging=false;
+            const gauge=document.getElementById('touch-shoot-gauge');
+            if(gauge)gauge.style.height='0%';
+        } else {
+            this.touchInput.tackle=false;
+            this.touchInput.pressure=false;
+        }
     }
 
     toggleFullscreen() {
@@ -581,10 +623,10 @@ class InputManager {
                 moveX: Math.abs(gpMoveX) > 0.05 ? gpMoveX : (this.touchInput.moveX || moveX),
                 moveZ: Math.abs(gpMoveZ) > 0.05 ? gpMoveZ : (this.touchInput.moveZ || moveZ),
                 pass: passKey || gpPass || this.touchInput.pass || this.pressedTouch.has('btn-touch-pass'),
-                shootHold: shootHold || gpShootHold || this.touchInput.shootCharging || this.pressedTouch.has('btn-touch-shoot'),
-                through: throughKey || gpThrough || this.touchInput.through || this.pressedTouch.has('btn-touch-through'),
-                tackle: tackleKey || gpTackle,
-                sprint: sprintKey || gpSprint || this.touchInput.sprint,
+                shootHold: shootHold || gpShootHold || this.touchInput.shootCharging || (this.touchContext!=='defense' && this.pressedTouch.has('btn-touch-shoot')),
+                through: throughKey || gpThrough || this.touchInput.through || (this.touchContext!=='defense' && this.pressedTouch.has('btn-touch-through')),
+                tackle: tackleKey || gpTackle || this.touchInput.tackle || (this.touchContext==='defense' && this.pressedTouch.has('btn-touch-shoot')),
+                sprint: sprintKey || gpSprint || this.touchInput.sprint || this.touchInput.pressure,
                 switchPlayer: switchKey || gpSwitch || this.touchInput.switchPlayer || this.pressedTouch.has('btn-touch-switch')
             };
         }

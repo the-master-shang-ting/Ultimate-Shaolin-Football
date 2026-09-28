@@ -25,6 +25,7 @@ class RulesEngine {
         this.onStateChange = null;
         this.onGoalEvent = null;
         this.onCardEvent = null;
+        this.onInjuryEvent = null;
 
         // Construir árbitros visuales 3D
         this.buildOfficials();
@@ -246,6 +247,20 @@ class RulesEngine {
     }
 
     // --- Evaluación de Faltas y Tarjetas en Entradas (Tackles) ---
+    registerContactInjury(player, speed, isFromBehind, excessive) {
+        if (!player || player.injury) return null;
+        const impact = Math.max(0, Math.min(1, (speed - 4.5) / 7.5));
+        const chance = Math.min(.82, .14 + impact*.34 + (isFromBehind?.14:0) + (excessive?.18:0));
+        if (Math.random() >= chance) return null;
+        const isGoalkeeper = (player.role || player.playerData?.pos) === 'GK';
+        const type = isGoalkeeper ? 'HOMBRO' : isFromBehind ? 'TOBILLO' : impact > .72 ? 'GOLPE' : 'MUSCULAR';
+        const severity = Math.min(.88, .28 + impact*.38 + (excessive?.12:0) + Math.random()*.1);
+        player.injury = {type,severity};
+        player.model?.setInjured(true);
+        this.onInjuryEvent?.(player,player.injury);
+        return player.injury;
+    }
+
     evaluateTackle(tackler, ballCarrier, ballPos, physicsEngine = null) {
         if (this.matchState !== 'IN_PLAY' || tackler.isSentOff || ballCarrier.isSentOff ||
             tackler.teamId === ballCarrier.teamId || tackler.tackleResolved) return false;
@@ -321,6 +336,7 @@ class RulesEngine {
             if (this.soundEngine) this.soundEngine.playWhistle('long');
             if (this.onStateChange) this.onStateChange(this.matchState, awardedTeam);
             if (this.onCardEvent && cardType) this.onCardEvent(cardType, tackler);
+            this.registerContactInjury(ballCarrier,speed,isFromBehind,excessive);
 
             return true;
         }

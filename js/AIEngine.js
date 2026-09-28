@@ -5,6 +5,20 @@ class AIEngine {
         this.physics = physics;
         this.rules = rules;
         this.renderer = renderer;
+        this.onStatEvent = null;
+    }
+    getInjuryFactor(player, aspect = 'speed') {
+        const severity = Math.max(0, Math.min(.95, Number(player?.injury?.severity) || 0));
+        if (!severity) return 1;
+        const goalkeeper = (player.role || player.playerData?.pos) === 'GK';
+        const penalty = {
+            speed: goalkeeper ? .62 : .48,
+            acceleration: goalkeeper ? .68 : .50,
+            technique: goalkeeper ? .48 : .36,
+            reaction: goalkeeper ? .72 : .42,
+            tackle: .38
+        }[aspect] ?? .45;
+        return Math.max(.32, 1 - severity * penalty);
     }
     updateTeam(team, opposition, ball, dt, isAIControlled = true, selected = -1, input = null) {
         const live = team.players.filter(p => !p.isSentOff);
@@ -27,15 +41,18 @@ class AIEngine {
     move(p, dx, dz, speed, dt, sprint = false) {
         const length = Math.hypot(dx,dz);
         const factor = length > 1 ? 1/length : 1;
+        speed *= this.getInjuryFactor(p,'speed');
         if (p.isTackling) speed *= 1.2;
         const targetVX = dx*factor*speed, targetVZ = dz*factor*speed;
-        const blend = p.isTackling ? (1-Math.exp(-6*dt)) : (1-Math.exp(-16*dt));
+        const response = (p.isTackling ? 6 : 16) * this.getInjuryFactor(p,'acceleration');
+        const blend = 1-Math.exp(-response*dt);
         p.vx += (targetVX-p.vx)*blend;
         p.vz += (targetVZ-p.vz)*blend;
         p.x = THREE.MathUtils.clamp(p.x+p.vx*dt,-52.1,52.1);
         p.z = THREE.MathUtils.clamp(p.z+p.vz*dt,-33.7,33.7);
         if (length > 0.05) p.facingAngle = Math.atan2(dx,dz);
-        p.stamina = THREE.MathUtils.clamp(p.stamina + dt*(sprint && length > .1 ? -12 : 7),0,100);
+        const injuryDrain = p.injury ? 1.18 : 1;
+        p.stamina = THREE.MathUtils.clamp(p.stamina + dt*(sprint && length > .1 ? -12*injuryDrain : 7),0,100);
         if (p.model) {
             p.model.mesh.position.set(p.x,0,p.z);
             p.model.updateAnimation(dt,Math.hypot(p.vx,p.vz),p.facingAngle);
@@ -240,19 +257,23 @@ class AIEngine {
         this.move(gk,dx/Math.max(d,1),dz/Math.max(d,1),Math.min(gkSpeed,d/Math.max(dt,.001)),dt);
         
         // Atajadas en el arco ampliado: tiros esquinados o potentes pueden superar al arquero
-        const reach = incoming ? 1.45 : 1.1;
-        const porSkill = (gk.playerData?.stats?.POR || 80) / 99;
+        const reactionFactor = this.getInjuryFactor(gk,'reaction');
+        const reach = (incoming ? 1.45 : 1.1) * (.72 + .28 * reactionFactor);
+        const porSkill = ((gk.playerData?.stats?.POR || 80) / 99) * reactionFactor;
         const cornerDanger = (Math.abs(ball.z) > 3.4 || ball.y > 2.2);
         const canCatch = !cornerDanger || (porSkill > 0.82 && ball.speed < 23);
 
         if (inBox && !ball.owner && Math.hypot(gk.x-ball.x,gk.z-ball.z)<reach && ball.y<2.8 && gk.actionCooldown<=0 && canCatch) {
+            const countsAsSave=ball.lastKicker?.teamId!==gk.teamId&&ball.speed>5;
             if (ball.speed>14) {
                 gk.model?.triggerGoalkeeperDive(Math.sign(ball.z-gk.z)||1);
                 ball.vx=dir*7; ball.vz=(Math.sign(ball.z)||1)*9; ball.vy=2;
                 ball.lastKicker=gk; ball.owner=null; ball.passTarget=null;
                 gk.actionCooldown=.8;
+                if(countsAsSave)this.onStatEvent?.(gk.teamId,'saves',1);
             } else {
                 ball.owner=gk;ball.lastKicker=gk;ball.vx=ball.vy=ball.vz=0;gk.holdTimer=0;
+                if(countsAsSave)this.onStatEvent?.(gk.teamId,'saves',1);
             }
         }
     }
@@ -261,16 +282,19 @@ class AIEngine {
         const goalX=team.attacksRight?52.5:-52.5;
         const aimedZ = p.isUserControlled ? THREE.MathUtils.clamp(Math.cos(p.facingAngle)*4.2,-4.2,4.2) : (p.z>0?-3.4:3.4);
         const distance=Math.hypot(goalX-p.x,aimedZ-p.z);
-        this.physics.kickBall({x:goalX-p.x,z:aimedZ-p.z},power,type==='CLEAR'?.48:THREE.MathUtils.clamp(distance*.0035,.035,.18),0,p);
+        const effectivePower = power * this.getInjuryFactor(p,'technique');
+        if(type==='SHOOT'&&Math.abs(aimedZ)<=3.66)this.onStatEvent?.(p.teamId,'shotsOnTarget',1);
+        this.physics.kickBall({x:goalX-p.x,z:aimedZ-p.z},effectivePower,type==='CLEAR'?.48:THREE.MathUtils.clamp(distance*.0035,.035,.18),0,p);
         p.actionCooldown=.32;
-        p.model?.triggerKick(power>.85);
-        window.USF.soundEngine?.playKick(power,power>.85);
+        p.model?.triggerKick(effectivePower>.85);
+        window.USF.soundEngine?.playKick(effectivePower,effectivePower>.85);
     }
     executePass(p,ball,team,opposition,through) {
         const option=this.findBestPassingOption(p,team,opposition,through);
         if (option) this.executePassToTeammate(p,option.teammate,ball,through,p.playerData.stats.PAS,team);
         else {
-            this.physics.kickBall({x:Math.sin(p.facingAngle),z:Math.cos(p.facingAngle)},.25,.02,0,p);
+            this.onStatEvent?.(p.teamId,'passes',1);
+            this.physics.kickBall({x:Math.sin(p.facingAngle),z:Math.cos(p.facingAngle)},.25*this.getInjuryFactor(p,'technique'),.02,0,p);
             p.actionCooldown=.3;
         }
     }
@@ -282,7 +306,9 @@ class AIEngine {
         const dir=team.attacksRight?1:-1;
         const tx=target.x+(through?dir*5:target.vx*.2),tz=target.z+(through?target.vz*.35:target.vz*.2);
         const distance=Math.hypot(tx-ball.x,tz-ball.z);
-        this.physics.kickBall({x:tx-ball.x,z:tz-ball.z},THREE.MathUtils.clamp(distance/65,.08,.7),.02,0,p);
+        const passPower = THREE.MathUtils.clamp(distance/65,.08,.7) * this.getInjuryFactor(p,'technique');
+        this.onStatEvent?.(p.teamId,'passes',1);
+        this.physics.kickBall({x:tx-ball.x,z:tz-ball.z},passPower,.02,0,p);
         ball.passTarget=target;
         p.actionCooldown=.3;
         p.model?.triggerKick(false);
@@ -300,8 +326,9 @@ class AIEngine {
         const fwdX = Math.sin(p.facingAngle), fwdZ = Math.cos(p.facingAngle);
         // Judge approach speed, not the artificial animation impulse added below.
         p.tackleImpactSpeed = Math.hypot(p.vx, p.vz);
-        p.vx += fwdX * 6.2;
-        p.vz += fwdZ * 6.2;
+        const tackleFactor = this.getInjuryFactor(p,'tackle');
+        p.vx += fwdX * 6.2 * tackleFactor;
+        p.vz += fwdZ * 6.2 * tackleFactor;
 
         p.model?.triggerSlideTackle();
         this.renderer?.emitTackleTurf(p,{x:fwdX,z:fwdZ});
@@ -331,7 +358,7 @@ class AIEngine {
 
             // Despeje o robo físico con impulso
             const defStat = p.playerData?.stats?.DEF || 70;
-            const tacklePower = 0.25 + (defStat / 99) * 0.35;
+            const tacklePower = (0.25 + (defStat / 99) * 0.35) * tackleFactor;
             this.physics.kickBall({x: fwdX, z: fwdZ}, tacklePower, 0.04, 0, p);
         } else if (distToBall < 1.85 && ball.y < 1.0) {
             p.tackleWonBall = true;

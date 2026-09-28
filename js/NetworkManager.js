@@ -214,7 +214,7 @@ class NetworkManager {
                     this.onRemoteInput?.(data.e || {});
                     return;
                 }
-                if (['MATCH_MENU', 'PAUSE_REQUEST', 'SQUAD_EDIT', 'SQUAD_REQUEST', 'SQUAD_SYNC', 'SQUAD_RESULT', 'MATCH_START', 'CARD'].includes(data.type)) {
+                if (['MATCH_MENU', 'PAUSE_REQUEST', 'SQUAD_EDIT', 'SQUAD_REQUEST', 'SQUAD_SYNC', 'SQUAD_RESULT', 'MATCH_START', 'CARD', 'INJURY'].includes(data.type)) {
                     this.onControl?.(data);
                 }
                 return;
@@ -275,6 +275,10 @@ class NetworkManager {
     broadcastHostState(gameState, now = performance.now()) {
         if (!this.shouldSendHostState(now)) return;
         const setPiece = gameState.setPiece;
+        const stats=gameState.stats||{team1:{},team2:{}};
+        const compactStats=team=>[
+            team.yellowCards||0,team.shotsOnTarget||0,team.passes||0,team.saves||0,team.corners||0,this.round(team.possession||0,1)
+        ];
         const packet = {
             type: 'STATE',
             n: ++this.stateSequence,
@@ -290,10 +294,11 @@ class NetworkManager {
                 setPiece.kickerIndex, setPiece.targetName || ''] : null,
             a: [gameState.active1, gameState.active2],
             h: gameState.half,
+            ms: [...compactStats(stats.team1),...compactStats(stats.team2)],
             p: gameState.p.map(player => [
                 player.x, player.z, player.fa,
                 this.round(player.vx, 1), this.round(player.vz, 1),
-                player.stamina, player.red ? 1 : 0
+                player.stamina, player.red ? 1 : 0, player.injury || 0
             ])
         };
         try {

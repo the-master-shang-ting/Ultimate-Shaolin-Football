@@ -28,6 +28,7 @@ class GameEngine {
         this.replay = new window.USF.ReplaySystem(5, 60);
         this.ui = new window.USF.UIManager();
         this.squads = new window.USF.SquadManager(this);
+        this.ai.onStatEvent=(teamId,key,amount)=>this.recordMatchStat(teamId,key,amount);
 
         // Equipos activos
         this.team1 = null;
@@ -126,6 +127,7 @@ class GameEngine {
         };
 
         this.rules.onCardEvent = (cardType, player) => {
+            if(cardType==='YELLOW'||(cardType==='RED'&&player.cardReason==='Segunda amarilla'))this.recordMatchStat(player.teamId,'yellowCards',1);
             const title = (cardType === 'RED') ? "¡TARJETA ROJA!" : "TARJETA AMARILLA";
             const sub = `${player.playerData.name.toUpperCase()} (#${player.playerData.number}) · ${player.cardReason || ''}`;
             this.ui.showEventBanner(title, sub, 2.5);
@@ -134,7 +136,10 @@ class GameEngine {
             if(cardType==='RED') this.handleSendingOff(player);
         };
 
+        this.rules.onInjuryEvent = (player, injury) => this.registerInjury(player,injury,true,true);
+
         this.rules.onStateChange = (state, teamId) => {
+            if(state==='CORNER')this.recordMatchStat(teamId,'corners',1);
             if (state === 'GOAL') {
                 this.physics.freeze();
             } else if (state === 'OFFSIDE') {
@@ -287,7 +292,35 @@ class GameEngine {
                     this.ui.showEventBanner(title,`${player.playerData.name} · ${packet.reason}`,3);
                 }
             }
+            if(packet.type==='INJURY') {
+                const player=this[packet.teamId]?.players?.find(p=>p.playerData.id===packet.id);
+                if(player)this.registerInjury(player,packet.injury,true,false);
+            }
         }
+    }
+    registerInjury(player, injury, announce = true, broadcast = false) {
+        if(!player || !injury)return;
+        const severity=THREE.MathUtils.clamp(Number(injury.severity)||.3,.15,.95);
+        player.injury={type:injury.type||'GOLPE',severity,minute:injury.minute??Math.floor(this.matchSeconds/60)};
+        player.model?.setInjured(true);
+        if(announce) {
+            const loss=Math.round(severity*((player.role||player.playerData.pos)==='GK'?60:45));
+            const detail=`${player.playerData.name.toUpperCase()} · ${player.injury.type} · rendimiento -${loss}% · cambio recomendado`;
+            this.ui.showEventBanner('✚ JUGADOR LESIONADO',detail,3.8);
+            this.ui.showToast('Jugador lesionado',detail,'✚','disconnected',6500);
+        }
+        if(broadcast&&this.network.isHost)this.network.sendControl({type:'INJURY',teamId:player.teamId,id:player.playerData.id,injury:player.injury});
+    }
+    createMatchStats() {
+        const empty=()=>({yellowCards:0,shotsOnTarget:0,passes:0,saves:0,corners:0,possession:0});
+        return {team1:empty(),team2:empty()};
+    }
+    recordMatchStat(teamId,key,amount=1) {
+        if(this.network.mode==='LAN_CLIENT'||!this.matchStats?.[teamId]||!Object.hasOwn(this.matchStats[teamId],key))return;
+        this.matchStats[teamId][key]+=amount;
+    }
+    showFinalStatistics() {
+        this.ui.showMatchStats(this.team1.data,this.team2.data,this.rules.score,this.matchStats||this.createMatchStats());
     }
     handleSendingOff(player) {
         const team=this[player.teamId], live=team.players.filter(p=>!p.isSentOff);
@@ -302,6 +335,7 @@ class GameEngine {
         if(live.length<7) {
             this.rules.matchState='FULL_TIME';this.rules.stateTimer=0;this.physics.freeze();
             this.ui.showEventBanner('PARTIDO SUSPENDIDO',`${team.data.name}: menos de siete jugadores`,10);
+            this.showFinalStatistics();
         }
     }
     canLocallyControlSetPiece(asp) {
@@ -430,6 +464,7 @@ class GameEngine {
                 vz: 0,
                 facingAngle: 0,
                 stamina: 100,
+                injury: null,
                 isSentOff: false
             });
         });
@@ -459,6 +494,7 @@ class GameEngine {
                 vz: 0,
                 facingAngle: Math.PI,
                 stamina: 100,
+                injury: null,
                 isSentOff: false
             });
         });
@@ -471,6 +507,7 @@ class GameEngine {
         this.team2.opponents = this.team1.players;
 
         this.rules.score = { team1: 0, team2: 0 };
+        this.matchStats=this.createMatchStats();
         this.matchSeconds = 0;
         this.resetPositionsForKickoff('team1');
 
@@ -583,7 +620,7 @@ class GameEngine {
             ? {x:packet.b[0],y:packet.b[1],z:packet.b[2],vx:packet.b[3],vy:packet.b[4],vz:packet.b[5]}
             : packet.b;
         const playerData = (packet.p || []).map(player => Array.isArray(player) ? {
-            x:player[0],z:player[1],fa:player[2],vx:player[3],vz:player[4],stamina:player[5],red:!!player[6]
+            x:player[0],z:player[1],fa:player[2],vx:player[3],vz:player[4],stamina:player[5],red:!!player[6],injury:player[7]||0
         } : player);
         const score = Array.isArray(packet.s) ? {team1:packet.s[0],team2:packet.s[1]} : packet.score;
         const active = Array.isArray(packet.a) ? packet.a : [packet.active1,packet.active2];
@@ -595,12 +632,18 @@ class GameEngine {
         } : rawSetPiece;
 
         this.networkTargets = {ball:ballData,players:playerData,receivedAt:performance.now()};
+        const previousState=this.rules.matchState;
         this.rules.matchState = packet.g ?? packet.state;
         this.activeP1Index = active[0] ?? this.activeP1Index;
         this.activeP2Index = active[1] ?? this.activeP2Index;
         this.half = packet.h ?? packet.half ?? 1;
         this.rules.score = score || this.rules.score;
         this.rules.cards = packet.cards || this.rules.cards;
+        if(Array.isArray(packet.ms)) {
+            const decode=offset=>({yellowCards:packet.ms[offset]||0,shotsOnTarget:packet.ms[offset+1]||0,passes:packet.ms[offset+2]||0,
+                saves:packet.ms[offset+3]||0,corners:packet.ms[offset+4]||0,possession:packet.ms[offset+5]||0});
+            this.matchStats={team1:decode(0),team2:decode(6)};
+        } else if(packet.ms)this.matchStats=packet.ms;
         this.remoteSetPiece = sp;
         const canControlSetPiece=this.canLocallyControlSetPiece(sp);
         this.renderer.setPieceCameraConfig=canControlSetPiece && sp && ['FOUL','FREE_KICK','PENALTY','CORNER'].includes(sp.kind) ? {...sp,pos:sp.pos,team:this[sp.teamId],kicker:this[sp.teamId].players[sp.kickerIndex],dir:this[sp.teamId].attacksRight?1:-1} : null;
@@ -616,8 +659,16 @@ class GameEngine {
             if (!player) return;
             player.stamina = target.stamina ?? player.stamina;
             player.isSentOff = !!target.red;
+            const packedInjury=Number(target.injury)||0;
+            if(packedInjury>0) {
+                const types={1:'MUSCULAR',2:'TOBILLO',3:'GOLPE',4:'HOMBRO'};
+                const severity=(packedInjury%100)/100;
+                player.injury={type:types[Math.floor(packedInjury/100)]||'GOLPE',severity};
+            } else player.injury=null;
+            player.model?.setInjured(!!player.injury);
             player.model.mesh.visible = !player.isSentOff;
         });
+        if(previousState!=='FULL_TIME'&&this.rules.matchState==='FULL_TIME')this.showFinalStatistics();
     }
 
     interpolateNetworkState(dt) {
@@ -653,11 +704,13 @@ class GameEngine {
     // El NetworkManager decide la frecuencia adaptativa antes de construirlo.
     buildHostStatePacket() {
         const all = [...this.team1.players, ...this.team2.players];
+        const injuryCodes={MUSCULAR:1,TOBILLO:2,GOLPE:3,HOMBRO:4};
         const pData = all.map(p => ({
             x: Math.round(p.x * 100) / 100,
             z: Math.round(p.z * 100) / 100,
             fa: Math.round(p.facingAngle * 100) / 100,
-            red: p.isSentOff, role:p.role, slot:p.formationIndex, vx: p.vx, vz: p.vz, stamina: Math.round(p.stamina)
+            red: p.isSentOff, role:p.role, slot:p.formationIndex, vx: p.vx, vz: p.vz, stamina: Math.round(p.stamina),
+            injury:p.injury?(injuryCodes[p.injury.type]||3)*100+Math.min(99,Math.max(1,Math.round(p.injury.severity*100))):0
         }));
 
         return {
@@ -667,6 +720,7 @@ class GameEngine {
             time: this.matchSeconds,
             p: pData,
             cards:this.rules.cards,
+            stats:this.matchStats,
             setPiece:this.activeSetPiece?{kind:this.activeSetPiece.kind,teamId:this.activeSetPiece.teamId,pos:this.activeSetPiece.pos,
                 aimAngle:this.activeSetPiece.aimAngle,curve:this.activeSetPiece.curve,chargePower:this.activeSetPiece.chargePower,
                 kickerIndex:this.activeSetPiece.team.players.indexOf(this.activeSetPiece.kicker),targetName:this.activeSetPiece.passTarget?.playerData.name}:null,
@@ -801,6 +855,12 @@ class GameEngine {
         const dir = team.attacksRight ? 1 : -1;
         const aimAngle = asp.aimAngle;
         const dirVector = { x: Math.sin(aimAngle), z: Math.cos(aimAngle) };
+        const techniqueFactor = this.ai.getInjuryFactor(kicker,'technique');
+        if(['PENALTY','FOUL','FREE_KICK'].includes(kind)&&actionType==='SHOOT') {
+            const goalX=dir*52.5,travel=(goalX-this.physics.ball.x)/(dirVector.x||dir*.001);
+            const goalZ=this.physics.ball.z+dirVector.z*travel;
+            if(travel>0&&Math.abs(goalZ)<=3.66)this.recordMatchStat(kicker.teamId,'shotsOnTarget',1);
+        }
 
         this.activeSetPiece = null;
         if (this.physics?.ball) this.physics.ball.isSetPieceActive = false;
@@ -828,19 +888,20 @@ class GameEngine {
                 return;
             }
         }
+        if(actionType==='PASS'||actionType==='THROUGH'||kind==='CORNER'||kind==='THROW_IN')this.recordMatchStat(kicker.teamId,'passes',1);
 
         if (kind === 'PENALTY') {
             const lift = actionType === 'PASS' ? 0.03 : 0.06 + power * 0.20;
-            const kickPower = actionType === 'PASS' ? 0.45 : Math.max(0.42, power);
+            const kickPower = (actionType === 'PASS' ? 0.45 : Math.max(0.42, power)) * techniqueFactor;
             this.physics.kickBall(dirVector, kickPower, lift, (Math.cos(aimAngle)) * 0.15, kicker);
             kicker.model?.triggerKick(kickPower > 0.7);
             this.sound?.playKick(kickPower, kickPower > 0.85);
         } else if (kind === 'CORNER') {
             if (actionType === 'PASS') {
-                this.physics.kickBall(dirVector, 0.42, 0.02, 0, kicker);
+                this.physics.kickBall(dirVector, 0.42*techniqueFactor, 0.02, 0, kicker);
             } else {
                 const lift = 0.30;
-                const kickPower = 0.52 + power * 0.38;
+                const kickPower = (0.52 + power * 0.38) * techniqueFactor;
                 const rawCurve=THREE.MathUtils.clamp(asp.curve||0,-1,1);
                 const curve = Math.sign(rawCurve)*Math.pow(Math.abs(rawCurve),.82)*1.08;
                 this.physics.kickBall(dirVector, kickPower, lift, curve, kicker);
@@ -848,15 +909,15 @@ class GameEngine {
             kicker.model?.triggerKick(power > 0.6);
             this.sound?.playKick(power, power > 0.8);
         } else if (kind === 'THROW_IN') {
-            const throwPower = actionType === 'THROUGH' || power > 0.6 ? 0.62 : 0.38;
+            const throwPower = (actionType === 'THROUGH' || power > 0.6 ? 0.62 : 0.38) * techniqueFactor;
             this.physics.kickBall(dirVector, throwPower, 0.12, 0, kicker);
             kicker.model?.triggerKick(false);
             this.sound?.playKick(0.35);
         } else if (kind === 'GOAL_KICK') {
             if (actionType === 'PASS') {
-                this.physics.kickBall(dirVector, 0.42, 0.02, 0, kicker);
+                this.physics.kickBall(dirVector, 0.42*techniqueFactor, 0.02, 0, kicker);
             } else {
-                this.physics.kickBall(dirVector, 0.85, 0.32, 0, kicker);
+                this.physics.kickBall(dirVector, 0.85*techniqueFactor, 0.32, 0, kicker);
             }
             kicker.model?.triggerKick(power > 0.6);
             this.sound?.playKick(0.8);
@@ -865,16 +926,16 @@ class GameEngine {
             if (actionType === 'SHOOT') {
                 const distance=Math.hypot(dir*52.5-asp.pos.x,asp.pos.z);
                 const lift = THREE.MathUtils.clamp(.17+distance*.003-power*.035,.18,.32);
-                const kickPower = 0.30 + power * 0.65;
+                const kickPower = (0.30 + power * 0.65) * techniqueFactor;
                 const rawCurve=THREE.MathUtils.clamp(asp.curve||0,-1,1);
                 const curve = Math.sign(rawCurve)*Math.pow(Math.abs(rawCurve),.82)*1.12;
                 this.physics.kickBall(dirVector, kickPower, lift, curve, kicker);
                 this.physics.ball.wx *= -.65;
                 this.physics.ball.wz *= -.65;
             } else if (actionType === 'THROUGH') {
-                this.physics.kickBall(dirVector, 0.6, 0.18, 0, kicker);
+                this.physics.kickBall(dirVector, 0.6*techniqueFactor, 0.18, 0, kicker);
             } else {
-                this.physics.kickBall(dirVector, 0.45, 0.02, 0, kicker);
+                this.physics.kickBall(dirVector, 0.45*techniqueFactor, 0.02, 0, kicker);
             }
             kicker.model?.triggerKick(power > 0.65);
             this.sound?.playKick(power, power > 0.8);
@@ -1040,6 +1101,24 @@ class GameEngine {
         const displayedSetPiecePower=this.canLocallyControlSetPiece(displayedSetPiece)?displayedSetPiece?.chargePower||0:0;
         const hudPower=displayedSetPiece?(this.canLocallyControlSetPiece(displayedSetPiece)?Math.max(displayedSetPiecePower,input.currentShootPower||0):0):(input.currentShootPower||0);
         this.ui.updateActivePlayer(hudPlayer,hudPower,this.rules.cards[hudPlayer.teamId][hudPlayer.playerData.id]);
+        if(this.input.isTouchDevice) {
+            const allPlayers=[...this.team1.players,...this.team2.players].filter(player=>!player.isSentOff);
+            const nearest=allPlayers.reduce((best,player)=>{
+                const distance=Math.hypot(player.x-this.physics.ball.x,player.z-this.physics.ball.z);
+                return !best||distance<best.distance?{player,distance}:best;
+            },null);
+            const localTeam=client?this.team2:this.team1;
+            // El host conoce al dueño exacto; el cliente WebRTC lo deduce por
+            // proximidad porque los snapshots no envían referencias de objetos.
+            const owner=client?null:this.physics.ball.owner;
+            const opponentControlsBall=owner
+                ? owner.teamId!==localTeam.id
+                : nearest?.distance<1.7&&nearest.player.teamId!==localTeam.id&&this.physics.ball.y<1.1;
+            const touchContext=displayedSetPiece&&this.canLocallyControlSetPiece(displayedSetPiece)
+                ? 'set-piece'
+                : opponentControlsBall?'defense':'attack';
+            this.input.setTouchContext(touchContext);
+        }
         this.ui.renderRadar(this.team1.players,this.team2.players,this.physics.ball);
         const team = client ? this.team2 : this.team1;
         const active = client ? this.activeP2Index : this.activeP1Index;
@@ -1194,6 +1273,8 @@ class GameEngine {
                     this.rules.checkPitchBoundaries(this.physics.ball,this.physics.ball.lastKicker?.teamId||lastTeam,this.physics);
                 }
                 if(this.rules.matchState==='IN_PLAY') {
+                    const possessionTeam=this.physics.ball.owner?.teamId;
+                    if(possessionTeam)this.recordMatchStat(possessionTeam,'possession',dt);
                     this.matchSeconds = Math.min(targetEnd2 + 60, this.matchSeconds + dt * this.timeScale);
                 }
                 this.replay.recordFrame(this.physics.ball,[...this.team1.players,...this.team2.players]);
@@ -1221,6 +1302,7 @@ class GameEngine {
                     this.matchSeconds=targetEnd2;this.rules.matchState='FULL_TIME';this.physics.freeze();
                     this.sound.playWhistle('triple');
                     this.ui.showEventBanner('FINAL DEL PARTIDO',this.rules.score.team1+' - '+this.rules.score.team2,8);
+                    this.showFinalStatistics();
                 }
             }
             this.rules.updateOfficials(dt,this.physics.ball,0,0);
