@@ -73,3 +73,8 @@ C o el botón CÁMARA recorren Completa → TV → Comentarista → Jugador.
 - El receptor obtiene el control durante el pase y al recibir. Una selección manual tiene prioridad y un breve bloqueo evita cambios automáticos inmediatos no deseados.
 
 Las pulsaciones breves de teclado y botones táctiles se conservan hasta el siguiente fotograma para evitar perder cambios rápidos de jugador.
+
+## Multijugador Global multidispositivo
+
+Ahora puedes jugar multijugador globalmente en todos los dispositivos que tengan internet y soporten codigo HTML.
+Usa la pagina: 
