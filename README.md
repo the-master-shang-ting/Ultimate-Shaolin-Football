@@ -77,4 +77,4 @@ Las pulsaciones breves de teclado y botones táctiles se conservan hasta el sigu
 ## Multijugador Global multidispositivo
 
 Ahora puedes jugar multijugador globalmente en todos los dispositivos que tengan internet y soporten codigo HTML.
-Usa la pagina: 
+Usa la pagina: https://the-master-shang-ting.github.io/Ultimate-Shaolin-Football/
