@@ -904,40 +904,31 @@ class RenderEngine {
     updateSetPieceAimGuide(ballPos, dirAngle, active, power = 0, curve = 0) {
         if (!this.aimGuideGroup) {
             this.aimGuideGroup = new THREE.Group();
-            
-            // Línea de trayectoria en el suelo
-            const lineGeom = new THREE.PlaneGeometry(0.35, 8.0);
-            lineGeom.translate(0, 4.0, 0); // Origen en la base
-            const lineMat = new THREE.MeshBasicMaterial({
-                color: 0x00E5FF,
-                transparent: true,
-                opacity: 0.65,
-                depthWrite: false,
-                side: THREE.DoubleSide
-            });
-            this.aimLineMesh = new THREE.Mesh(lineGeom, lineMat);
-            this.aimLineMesh.rotation.x = Math.PI / 2;
-            this.aimGuideGroup.add(this.aimLineMesh);
+            this.pitchGroup.add(this.aimGuideGroup);
 
-            // Marcador de destino / flecha
-            const arrowGeom = new THREE.ConeGeometry(0.6, 1.2, 16);
-            arrowGeom.rotateX(Math.PI / 2);
-            arrowGeom.translate(0, 0, 8.0);
-            const arrowMat = new THREE.MeshBasicMaterial({
-                color: 0xFFD700,
-                transparent: true,
-                opacity: 0.85,
-                depthWrite: false
-            });
-            this.aimArrowMesh = new THREE.Mesh(arrowGeom, arrowMat);
-            this.aimArrowMesh.position.y = 0.02;
+            const geometry=new THREE.BufferGeometry();
+            geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(33*3),3));
+            this.curveGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({
+                color:0x00e5ff,transparent:true,opacity:.96,depthTest:false,depthWrite:false
+            }));
+            this.curveGuide.renderOrder=20;
+            this.aimGuideGroup.add(this.curveGuide);
+
+            const arrowGeom=new THREE.ConeGeometry(.48,1.35,16);
+            arrowGeom.rotateX(Math.PI/2);
+            this.aimArrowMesh=new THREE.Mesh(arrowGeom,new THREE.MeshBasicMaterial({
+                color:0xffd700,transparent:true,opacity:.98,depthTest:false,depthWrite:false
+            }));
+            this.aimArrowMesh.renderOrder=21;
             this.aimGuideGroup.add(this.aimArrowMesh);
 
-            this.pitchGroup.add(this.aimGuideGroup);
-            const geometry=new THREE.BufferGeometry();
-            geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(25*3),3));
-            this.curveGuide=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xffd700,transparent:true,opacity:.9,depthTest:false}));
-            this.aimGuideGroup.add(this.curveGuide);
+            const ringGeom=new THREE.RingGeometry(.5,.72,32);
+            ringGeom.rotateX(-Math.PI/2);
+            this.aimTargetRing=new THREE.Mesh(ringGeom,new THREE.MeshBasicMaterial({
+                color:0xffd700,transparent:true,opacity:.78,side:THREE.DoubleSide,depthTest:false,depthWrite:false
+            }));
+            this.aimTargetRing.renderOrder=20;
+            this.aimGuideGroup.add(this.aimTargetRing);
         }
 
         if (!active || !ballPos) {
@@ -948,19 +939,31 @@ class RenderEngine {
         this.aimGuideGroup.visible = true;
         this.aimGuideGroup.position.set(ballPos.x, 0.03, ballPos.z);
         this.aimGuideGroup.rotation.y = dirAngle;
+        this.aimGuideGroup.scale.set(1,1,1);
+        const safePower=THREE.MathUtils.clamp(Number(power)||0,0,1);
+        const safeCurve=THREE.MathUtils.clamp(Number(curve)||0,-1,1);
+        const length=9+safePower*11;
+        const curveShape=Math.sign(safeCurve)*Math.pow(Math.abs(safeCurve),.82);
+        const bend=curveShape*(1.2+length*.12);
         const positions=this.curveGuide.geometry.attributes.position;
-        for(let i=0;i<25;i++) {const t=i/24;positions.setXYZ(i,curve*t*t*3,.12,t*12);}
-        positions.needsUpdate=true;
-
-        // Escalar longitud según la potencia cargada
-        const lengthScale = 1.0 + (power || 0) * 1.2;
-        this.aimGuideGroup.scale.set(1.0, 1.0, lengthScale);
-
-        // Color más intenso al cargar potencia
-        if (this.aimLineMesh && this.aimLineMesh.material) {
-            const chargeColor = power > 0.6 ? 0xFF3366 : (power > 0.2 ? 0xFFCC00 : 0x00E5FF);
-            this.aimLineMesh.material.color.setHex(chargeColor);
+        for(let i=0;i<33;i++) {
+            const t=i/32;
+            positions.setXYZ(i,bend*t*t,.1+Math.sin(t*Math.PI)*.035,t*length);
         }
+        positions.needsUpdate=true;
+        const endX=bend,endZ=length;
+        const tangentAngle=Math.atan2(2*bend,length);
+        this.aimArrowMesh.position.set(endX,.16,endZ);
+        this.aimArrowMesh.rotation.set(0,tangentAngle,0);
+        this.aimArrowMesh.scale.setScalar(1+safePower*.38);
+        this.aimTargetRing.position.set(endX,.04,endZ);
+        this.aimTargetRing.scale.setScalar(1+safePower*.35);
+
+        const guideColor=Math.abs(safeCurve)<.05?0x00e5ff:(safeCurve<0?0x5aa7ff:0xff6ad5);
+        this.curveGuide.material.color.setHex(guideColor);
+        this.curveGuide.material.opacity=.72+safePower*.25;
+        this.aimArrowMesh.material.color.setHex(safePower>.78?0xff375f:(safePower>.38?0xffd700:0x00ff88));
+        this.aimTargetRing.material.color.copy(this.aimArrowMesh.material.color);
     }
 
     // Render del frame

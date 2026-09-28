@@ -8,11 +8,11 @@ Formaciones: 4-3-3, 4-4-2, 4-2-3-1, 4-1-2-1-2, 3-5-2 y 5-3-2. Los roles afectan 
 
 ## Tiros libres
 
-- Izquierda/derecha del stick, joystick o teclado ajusta gradualmente la dirección; sprint activa el ajuste fino.
-- Arriba/abajo ajusta el efecto; también hay botones táctiles para reducirlo, quitarlo y aumentarlo.
+- Izquierda/derecha del stick, joystick o teclado ajusta gradualmente la dirección; sprint activa el ajuste fino. La guía curva termina en una flecha y un aro que muestran dirección, efecto y potencia antes de patear.
+- Arriba/abajo ajusta el efecto. El panel muestra porcentaje y sentido de la curva, incorpora un deslizador táctil y botones para sumar efecto a cada lado o volver a un tiro recto.
 - CAMBIO (Q/LB, Enter para P2) o «Elegir compañero» recorre los receptores. PASE ejecuta un pase asistido; FILTRADO busca el espacio por delante del receptor. Se conserva la comprobación de fuera de juego.
 - Mantener TIRO y soltar define la potencia. El efecto lateral es independiente del apuntado, y el tiro libre tiene caída. La guía curva es orientativa, no una predicción física exacta.
-- La cámara conserva el eje del arco mientras se apunta. El anfitrión calcula también los tiros libres del invitado y sincroniza su cámara y guía.
+- La cámara conserva el eje del arco mientras se apunta. En WebRTC el anfitrión calcula también los tiros libres del invitado, pero panel, cámara de apuntado y guía se muestran únicamente al jugador que ejecuta.
 
 ## Disciplina
 

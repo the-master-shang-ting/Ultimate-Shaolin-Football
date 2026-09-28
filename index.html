@@ -309,12 +309,32 @@
         </div>
     </div>
     <div id="set-piece-panel" hidden>
-        <div id="set-piece-info"></div>
+        <div class="set-piece-header">
+            <span id="set-piece-kind">BALÓN PARADO</span>
+            <strong id="set-piece-side">TIRO RECTO</strong>
+        </div>
+        <div class="set-piece-target">
+            <span>Receptor</span>
+            <strong id="set-piece-target-name">Sin seleccionar</strong>
+        </div>
+        <div id="set-piece-curve-control" class="set-piece-control-block">
+            <div class="set-piece-meter-heading">
+                <label for="set-piece-curve-range">Efecto</label>
+                <output id="set-piece-curve-value" for="set-piece-curve-range">0%</output>
+            </div>
+            <input id="set-piece-curve-range" type="range" min="-100" max="100" value="0" step="5" aria-label="Cantidad y dirección del efecto">
+            <div class="set-piece-scale"><span>↶ Izquierda</span><span>Recto</span><span>Derecha ↷</span></div>
+        </div>
+        <div class="set-piece-power-block">
+            <div class="set-piece-meter-heading"><span>Potencia</span><output id="set-piece-power-value">0%</output></div>
+            <div class="set-piece-power-track"><div id="set-piece-power-fill"></div></div>
+        </div>
+        <div id="set-piece-info" class="set-piece-info"></div>
         <div class="set-piece-actions">
-            <button id="btn-curve-left" aria-label="Efecto a la izquierda">Efecto −</button>
-            <button id="btn-curve-reset">Sin efecto</button>
-            <button id="btn-curve-right" aria-label="Efecto a la derecha">Efecto +</button>
-            <button id="btn-restart-target">Elegir compañero</button>
+            <button id="btn-curve-left" aria-label="Agregar efecto hacia la izquierda"><b>↶</b><span>Más izquierda</span></button>
+            <button id="btn-curve-reset"><b>○</b><span>Tiro recto</span></button>
+            <button id="btn-curve-right" aria-label="Agregar efecto hacia la derecha"><b>↷</b><span>Más derecha</span></button>
+            <button id="btn-restart-target"><b>⇄</b><span>Cambiar receptor</span></button>
         </div>
     </div>
 

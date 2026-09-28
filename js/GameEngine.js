@@ -206,15 +206,30 @@ class GameEngine {
             this.applyNetworkState(statePacket);
         };
         this.network.onControl = packet => this.handleNetworkControl(packet);
-        for(const [id,delta] of [['btn-curve-left',-.15],['btn-curve-reset',0],['btn-curve-right',.15]]) {
+        const curveRange=document.getElementById('set-piece-curve-range');
+        const setCurve=value=>{
+            const curve=THREE.MathUtils.clamp(Number(value)||0,-1,1);
+            const asp=this.network.mode==='LAN_CLIENT'?this.remoteSetPiece:this.activeSetPiece;
+            if(!asp || !this.canLocallyControlSetPiece(asp))return;
+            if(this.network.mode==='LAN_CLIENT') {
+                this.pendingCurve=curve;
+                this.remoteSetPiece.curve=curve;
+            } else this.activeSetPiece.curve=curve;
+            if(curveRange)curveRange.value=String(Math.round(curve*100));
+            this.updateSetPiecePanel(asp,true);
+        };
+        for(const [id,delta] of [['btn-curve-left',-.2],['btn-curve-reset',0],['btn-curve-right',.2]]) {
             document.getElementById(id).onclick=()=>{
-                if(this.network.mode==='LAN_CLIENT') {this.pendingCurve=delta===0?0:THREE.MathUtils.clamp((this.remoteSetPiece?.curve||0)+delta,-1,1);return;}
-                if(this.activeSetPiece && (this.activeSetPiece.teamId==='team1'||this.network.mode==='LOCAL_1V1'))this.activeSetPiece.curve=delta===0?0:THREE.MathUtils.clamp(this.activeSetPiece.curve+delta,-1,1);
+                const current=(Number(curveRange?.value)||0)/100;
+                setCurve(id==='btn-curve-reset'?0:current+delta);
             };
         }
+        curveRange?.addEventListener('input',event=>setCurve(Number(event.target.value)/100));
         document.getElementById('btn-restart-target').onclick=()=>{
+            const asp=this.network.mode==='LAN_CLIENT'?this.remoteSetPiece:this.activeSetPiece;
+            if(!asp || !this.canLocallyControlSetPiece(asp))return;
             if(this.network.mode==='LAN_CLIENT')this.pendingRestartTarget=true;
-            else if(this.activeSetPiece && (this.activeSetPiece.teamId==='team1'||this.network.mode==='LOCAL_1V1'))this.cycleRestartTarget(this.activeSetPiece);
+            else this.cycleRestartTarget(this.activeSetPiece);
         };
     }
 
@@ -289,22 +304,47 @@ class GameEngine {
             this.ui.showEventBanner('PARTIDO SUSPENDIDO',`${team.data.name}: menos de siete jugadores`,10);
         }
     }
+    canLocallyControlSetPiece(asp) {
+        if(!asp)return false;
+        if(this.network.mode==='LOCAL_1V1')return true;
+        if(this.network.mode==='LAN_CLIENT')return asp.teamId==='team2';
+        return asp.teamId==='team1';
+    }
     cycleRestartTarget(asp) {
         const options=asp.team.players.filter(p=>p!==asp.kicker&&!p.isSentOff)
             .sort((a,b)=>Math.hypot(a.x-asp.pos.x,a.z-asp.pos.z)-Math.hypot(b.x-asp.pos.x,b.z-asp.pos.z));
         if(!options.length)return;
         asp.passTarget=options[(options.indexOf(asp.passTarget)+1)%options.length];
         asp.aimAngle=Math.atan2(asp.passTarget.x-asp.pos.x,asp.passTarget.z-asp.pos.z);
+        this.updateSetPiecePanel(asp,this.canLocallyControlSetPiece(asp));
     }
-    updateSetPiecePanel(asp, canControl=true) {
+    updateSetPiecePanel(asp, canControl=this.canLocallyControlSetPiece(asp)) {
         const panel=document.getElementById('set-piece-panel');
-        panel.hidden=!asp;
-        if(!asp)return;
-        const freeKick=['FOUL','FREE_KICK'].includes(asp.kind);
-        document.getElementById('set-piece-info').textContent=`${asp.kind==='PENALTY'?'PENALTI':'BALÓN PARADO'}${freeKick?' · Efecto '+Math.round((asp.curve||0)*100)+'%':''} · ${asp.passTarget?.playerData?.name||asp.targetName||'Apuntá para pasar o tirar'} · ← → apuntar${freeKick?' · ↑ ↓ efecto':''}${asp.kind!=='PENALTY'?' · CAMBIO elegir compañero':''}`;
-        panel.querySelectorAll('button').forEach(button=>{button.disabled=!canControl;});
-        for(const id of ['btn-curve-left','btn-curve-reset','btn-curve-right'])document.getElementById(id).hidden=!freeKick;
-        document.getElementById('btn-restart-target').hidden=asp.kind==='PENALTY';
+        panel.hidden=!asp||!canControl;
+        if(!asp||!canControl)return;
+        const curvable=['FOUL','FREE_KICK','CORNER'].includes(asp.kind);
+        const curve=THREE.MathUtils.clamp(Number(asp.curve)||0,-1,1);
+        const power=THREE.MathUtils.clamp(Number(asp.chargePower)||0,0,1);
+        const kindNames={PENALTY:'PENALTI',CORNER:'TIRO DE ESQUINA',THROW_IN:'SAQUE DE BANDA',GOAL_KICK:'SAQUE DE META',FOUL:'TIRO LIBRE',FREE_KICK:'TIRO LIBRE'};
+        const targetName=asp.passTarget?.playerData?.name||asp.targetName||'Sin receptor seleccionado';
+        const side=Math.abs(curve)<.05?'TIRO RECTO':curve<0?'↶ CURVA IZQUIERDA':'CURVA DERECHA ↷';
+        document.getElementById('set-piece-kind').textContent=kindNames[asp.kind]||'BALÓN PARADO';
+        document.getElementById('set-piece-side').textContent=side;
+        document.getElementById('set-piece-target-name').textContent=targetName;
+        document.getElementById('set-piece-curve-value').textContent=`${curve>0?'+':''}${Math.round(curve*100)}%`;
+        document.getElementById('set-piece-power-value').textContent=`${Math.round(power*100)}%`;
+        document.getElementById('set-piece-power-fill').style.width=`${Math.round(power*100)}%`;
+        const range=document.getElementById('set-piece-curve-range');
+        if(document.activeElement!==range)range.value=String(Math.round(curve*100));
+        document.getElementById('set-piece-curve-control').hidden=!curvable;
+        const instruction=asp.kind==='PENALTY'
+            ? '← → apuntar · mantené TIRO para cargar · PASE para remate colocado'
+            : `← → dirección${curvable?' · ↑ ↓ efecto':''} · mantené TIRO para potencia · CAMBIO recorre compañeros`;
+        document.getElementById('set-piece-info').textContent=instruction;
+        for(const id of ['btn-curve-left','btn-curve-reset','btn-curve-right'])document.getElementById(id).hidden=!curvable;
+        const targetButton=document.getElementById('btn-restart-target');
+        targetButton.hidden=asp.kind==='PENALTY';
+        targetButton.querySelector('span').textContent=asp.passTarget||asp.targetName?'Siguiente receptor':'Elegir receptor';
     }
     setupInitialMenu() {
         // En el menú principal, la cámara orbita suavemente el estadio
@@ -562,9 +602,10 @@ class GameEngine {
         this.rules.score = score || this.rules.score;
         this.rules.cards = packet.cards || this.rules.cards;
         this.remoteSetPiece = sp;
-        this.renderer.setPieceCameraConfig=sp && ['FOUL','FREE_KICK','PENALTY','CORNER'].includes(sp.kind) ? {...sp,pos:sp.pos,team:this[sp.teamId],kicker:this[sp.teamId].players[sp.kickerIndex],dir:this[sp.teamId].attacksRight?1:-1} : null;
-        this.renderer.updateSetPieceAimGuide(sp?.pos,sp?.aimAngle||0,!!sp,sp?.chargePower||0,sp?.curve||0);
-        this.updateSetPiecePanel(sp,sp?.teamId==='team2');
+        const canControlSetPiece=this.canLocallyControlSetPiece(sp);
+        this.renderer.setPieceCameraConfig=canControlSetPiece && sp && ['FOUL','FREE_KICK','PENALTY','CORNER'].includes(sp.kind) ? {...sp,pos:sp.pos,team:this[sp.teamId],kicker:this[sp.teamId].players[sp.kickerIndex],dir:this[sp.teamId].attacksRight?1:-1} : null;
+        this.renderer.updateSetPieceAimGuide(sp?.pos,sp?.aimAngle||0,!!sp&&canControlSetPiece,sp?.chargePower||0,sp?.curve||0);
+        this.updateSetPiecePanel(sp,canControlSetPiece);
         this.team1.attacksRight=this.half===1;this.team2.attacksRight=this.half!==1;
         this.matchSeconds = packet.t ?? packet.time;
         this.ui.updateScoreboard(this.rules.score.team1,this.rules.score.team2,this.matchSeconds);
@@ -800,7 +841,8 @@ class GameEngine {
             } else {
                 const lift = 0.30;
                 const kickPower = 0.52 + power * 0.38;
-                const curve = Math.sign(kicker.z) * -0.22;
+                const rawCurve=THREE.MathUtils.clamp(asp.curve||0,-1,1);
+                const curve = Math.sign(rawCurve)*Math.pow(Math.abs(rawCurve),.82)*1.08;
                 this.physics.kickBall(dirVector, kickPower, lift, curve, kicker);
             }
             kicker.model?.triggerKick(power > 0.6);
@@ -824,7 +866,8 @@ class GameEngine {
                 const distance=Math.hypot(dir*52.5-asp.pos.x,asp.pos.z);
                 const lift = THREE.MathUtils.clamp(.17+distance*.003-power*.035,.18,.32);
                 const kickPower = 0.30 + power * 0.65;
-                const curve = (asp.curve||0)*.85;
+                const rawCurve=THREE.MathUtils.clamp(asp.curve||0,-1,1);
+                const curve = Math.sign(rawCurve)*Math.pow(Math.abs(rawCurve),.82)*1.12;
                 this.physics.kickBall(dirVector, kickPower, lift, curve, kicker);
                 this.physics.ball.wx *= -.65;
                 this.physics.ball.wz *= -.65;
@@ -958,14 +1001,15 @@ class GameEngine {
                 opponents,
                 pos: { x: pos.x, z: pos.z },
                 aimAngle: ['FOUL','FREE_KICK','PENALTY'].includes(kind)?Math.atan2(opponentGoalX-pos.x,-pos.z):kicker.facingAngle,
-                curve:0,
+                curve:kind==='CORNER'?Math.sign(pos.z)*-.22:0,
                 passTarget:null,
                 chargePower: 0,
                 isCharging: false,
                 afkTimer: 30.0
             };
             this.physics.freeze();
-            if (kind !== 'THROW_IN' && ['PENALTY', 'FOUL', 'FREE_KICK', 'CORNER'].includes(kind)) {
+            const canPresent=this.canLocallyControlSetPiece(this.activeSetPiece);
+            if (canPresent && kind !== 'THROW_IN' && ['PENALTY', 'FOUL', 'FREE_KICK', 'CORNER'].includes(kind)) {
                 this.renderer.setPieceCameraConfig = {
                     kind,
                     teamId,
@@ -992,13 +1036,21 @@ class GameEngine {
         this.ui.updateScoreboard(this.rules.score.team1,this.rules.score.team2,this.matchSeconds,addedMinutes);
         const client=this.network.mode==='LAN_CLIENT';
         const hudPlayer=client?this.team2.players[this.activeP2Index]:this.team1.players[this.activeP1Index];
-        this.ui.updateActivePlayer(hudPlayer,this.activeSetPiece?.chargePower||input.currentShootPower||0,this.rules.cards[hudPlayer.teamId][hudPlayer.playerData.id]);
+        const displayedSetPiece=client?this.remoteSetPiece:this.activeSetPiece;
+        const displayedSetPiecePower=this.canLocallyControlSetPiece(displayedSetPiece)?displayedSetPiece?.chargePower||0:0;
+        const hudPower=displayedSetPiece?(this.canLocallyControlSetPiece(displayedSetPiece)?Math.max(displayedSetPiecePower,input.currentShootPower||0):0):(input.currentShootPower||0);
+        this.ui.updateActivePlayer(hudPlayer,hudPower,this.rules.cards[hudPlayer.teamId][hudPlayer.playerData.id]);
         this.ui.renderRadar(this.team1.players,this.team2.players,this.physics.ball);
         const team = client ? this.team2 : this.team1;
         const active = client ? this.activeP2Index : this.activeP1Index;
         const candidate = this.getSwitchCandidate(team,active,input);
         const playable = this.rules.matchState === 'IN_PLAY' && !this.replay.isReplaying;
-        for(const p of [...this.team1.players,...this.team2.players])p.model?.setSuggested(playable && p===team.players[candidate] && candidate!==active);
+        const setPieceTarget=(this.canLocallyControlSetPiece(this.activeSetPiece)?this.activeSetPiece?.passTarget:null) || (client&&this.remoteSetPiece?.teamId==='team2'&&this.remoteSetPiece?.targetName
+            ? this.team2.players.find(player=>player.playerData.name===this.remoteSetPiece.targetName)
+            : null);
+        for(const p of [...this.team1.players,...this.team2.players])p.model?.setSuggested(
+            (playable && p===team.players[candidate] && candidate!==active) || p===setPieceTarget
+        );
         const next = document.getElementById('next-player');
         if(next)next.textContent = playable && candidate!==active ? 'CAMBIO → ' + team.players[candidate].playerData.name : 'Q / LB · CAMBIAR JUGADOR';
         const isOnline = this.network.mode === 'LAN_HOST' || this.network.mode === 'LAN_CLIENT';
@@ -1072,15 +1124,22 @@ class GameEngine {
                 const asp = this.activeSetPiece;
                 const activeInput = asp.teamId === 'team1' ? p1 : (p2 || {});
                 const kicker = asp.kicker;
+                const canPresent=this.canLocallyControlSetPiece(asp);
+                const curvable=['FOUL','FREE_KICK','CORNER'].includes(asp.kind);
                 kicker.x = asp.pos.x - Math.sin(asp.aimAngle) * 0.65;
                 kicker.z = asp.pos.z - Math.cos(asp.aimAngle) * 0.65;
                 kicker.vx = kicker.vz = 0;
 
                 const aimX=activeInput.aimX||0, aimY=activeInput.aimY||0;
                 if(Math.abs(aimX)>.15) {asp.aimAngle-=aimX*dt*(activeInput.sprint ? .24 : .65);asp.passTarget=null;}
-                if(Math.abs(aimY)>.15)asp.curve=THREE.MathUtils.clamp(asp.curve-aimY*dt*.65,-1,1);
+                if(curvable&&Math.abs(aimY)>.15)asp.curve=THREE.MathUtils.clamp(asp.curve-aimY*dt*.9,-1,1);
                 if(Number.isFinite(activeInput.curveValue)) {asp.curve=activeInput.curveValue;delete activeInput.curveValue;}
                 if(activeInput.switchPlayer && asp.kind!=='PENALTY')this.cycleRestartTarget(asp);
+                if(activeInput.shootHold) {
+                    asp.isCharging = true;
+                    asp.chargePower = Math.min(1.0, asp.chargePower + dt * 1.5);
+                    activeInput.currentShootPower = asp.chargePower;
+                }
                 kicker.facingAngle = asp.aimAngle;
                 if (kicker.model?.mesh) {
                     kicker.model.mesh.position.set(kicker.x, 0, kicker.z);
@@ -1091,8 +1150,8 @@ class GameEngine {
                     this.renderer.setPieceCameraConfig.aimAngle = asp.aimAngle;
                 }
 
-                this.renderer.updateSetPieceAimGuide(asp.pos, asp.aimAngle, true, asp.chargePower, asp.curve);
-                this.updateSetPiecePanel(asp,asp.teamId==='team1'||this.network.mode==='LOCAL_1V1');
+                this.renderer.updateSetPieceAimGuide(asp.pos, asp.aimAngle, canPresent, asp.chargePower, asp.curve);
+                this.updateSetPiecePanel(asp,canPresent);
 
                 const isP2 = (asp.teamId === 'team2' && this.network.mode === 'LOCAL_1V1');
                 const moveKeys = isP2 ? 'Flechas' : 'WASD';
@@ -1104,13 +1163,8 @@ class GameEngine {
                 else if (asp.kind === 'CORNER') hint = `TIRO DE ESQUINA: [${moveKeys}] Apuntar · [${shootKey}] Centro bombeado · [${passKey}] Pase en corto`;
                 else if (asp.kind === 'THROW_IN') hint = `SAQUE DE BANDA: [${moveKeys}] Apuntar · [${passKey}] Saque al pie · [${throughKey}] Saque largo`;
                 else if (asp.kind === 'GOAL_KICK') hint = `SAQUE DE META: [${moveKeys}] Apuntar · [${passKey}] Pase en corto · [${shootKey}] Despeje largo`;
-                this.ui.updateControlHint(hint);
+                if(canPresent)this.ui.updateControlHint(hint);
 
-                if (activeInput.shootHold) {
-                    asp.isCharging = true;
-                    asp.chargePower = Math.min(1.0, asp.chargePower + dt * 1.5);
-                    activeInput.currentShootPower = asp.chargePower;
-                }
                 if (activeInput.shootReleased || (!activeInput.shootHold && asp.isCharging && asp.chargePower > 0.05)) {
                     this.executeSetPieceAction('SHOOT', Math.max(0.25, asp.chargePower));
                 } else if (activeInput.pass) {

@@ -13,7 +13,7 @@ class PhysicsEngine {
         this.airDensity = 1.225; // kg/m^3
         this.crossArea = Math.PI * this.radius * this.radius;
         this.dragCoeff = 0.24; // Coeficiente de resistencia aerodinámica
-        this.magnusCoeff = 0.045; // Coeficiente del Efecto Magnus (curva)
+        this.magnusCoeff = 0.072; // Curva visible sin volver inestable la trayectoria
         this.gravity = -9.81;
 
         // Estado del balón
@@ -130,7 +130,9 @@ class PhysicsEngine {
         // Rotación para Efecto Magnus:
         // spinCurve > 0 curva a la derecha, < 0 a la izquierda
         // wy genera efecto lateral. wx/wz generan topspin/backspin
-        this.ball.wy = spinCurve * (15.0 + power * 25.0) * curveScale;
+        const limitedCurve = Math.max(-1.25, Math.min(1.25, spinCurve));
+        const curveResponse = Math.sign(limitedCurve) * Math.pow(Math.abs(limitedCurve), 0.88);
+        this.ball.wy = curveResponse * (21.0 + power * 34.0) * curveScale;
         this.ball.wx = -nz * (5.0 + power * 15.0);
         this.ball.wz = nx * (5.0 + power * 15.0);
 
@@ -202,7 +204,7 @@ class PhysicsEngine {
         b.vz += az * dt;
 
         // Disipación natural del spin en el aire
-        const spinDecay = Math.exp(-0.45 * dt);
+        const spinDecay = Math.exp(-0.30 * dt);
         b.wx *= spinDecay;
         b.wy *= spinDecay;
         b.wz *= spinDecay;
